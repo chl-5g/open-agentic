@@ -1,5 +1,14 @@
 //! 语音合成 (TTS) 模块
 
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+pub mod system;
+#[cfg(feature = "edge-piper")]
+pub mod piper;
+#[cfg(feature = "edge-coqui")]
+pub mod coqui;
+#[cfg(feature = "edge-cosyvoice")]
+pub mod cosyvoice;
+
 use async_trait::async_trait;
 use base64::Engine;
 use openclaw_core::{OpenClawError, Result};
@@ -317,7 +326,20 @@ pub fn create_tts(provider: TtsProvider, config: TtsConfig) -> Box<dyn TextToSpe
         TtsProvider::Azure => Box::new(AzureTts::new(config)),
         TtsProvider::Google => Box::new(GoogleTts::new(config)),
         TtsProvider::ElevenLabs => Box::new(ElevenLabsTts::new(config)),
+        #[cfg(feature = "edge-piper")]
+        TtsProvider::Piper => Box::new(crate::tts::piper::PiperTts::new(config)),
+        #[cfg(feature = "edge-coqui")]
+        TtsProvider::Coqui => Box::new(crate::tts::coqui::CoquiTts::new(config)),
+        #[cfg(feature = "edge-cosyvoice")]
+        TtsProvider::CosyVoice => Box::new(crate::tts::cosyvoice::CosyVoiceTts::new(config)),
+        #[cfg(target_os = "macos")]
+        TtsProvider::MacOSSystem => Box::new(crate::tts::system::macos::MacOSSystts::new(config)),
+        #[cfg(target_os = "linux")]
+        TtsProvider::LinuxSystem => Box::new(crate::tts::system::linux::LinuxSystemTts::new(config)),
+        #[cfg(target_os = "windows")]
+        TtsProvider::WindowsSystem => Box::new(crate::tts::system::windows::WindowsSystemTts::new(config)),
         TtsProvider::Custom(_) => Box::new(OpenAITts::new(config)),
+        _ => Box::new(OpenAITts::new(config)),
     }
 }
 

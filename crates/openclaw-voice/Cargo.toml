@@ -31,3 +31,15 @@ default = ["openai"]
 openai = []
 local-whisper = []
 edge-tts = []
+
+# System TTS (platform-specific)
+system-tts = []
+system-tts-apple = ["system-tts"]
+system-tts-linux = ["system-tts"]
+system-tts-windows = ["system-tts"]
+
+# Edge Run (local TTS engines)
+edge-local = []
+edge-piper = ["edge-local"]
+edge-coqui = ["edge-local"]
+edge-cosyvoice = ["edge-local"]

@@ -63,6 +63,18 @@ pub enum TtsProvider {
     Google,
     /// ElevenLabs TTS
     ElevenLabs,
+    /// Piper (本地, 轻量)
+    Piper,
+    /// Coqui TTS (本地, 高质量)
+    Coqui,
+    /// CosyVoice (本地 Docker)
+    CosyVoice,
+    /// macOS System TTS
+    MacOSSystem,
+    /// Linux System TTS (eSpeak/Festival)
+    LinuxSystem,
+    /// Windows System TTS (SAPI)
+    WindowsSystem,
     /// 自定义提供商 (用户配置)
     Custom(String),
 }
