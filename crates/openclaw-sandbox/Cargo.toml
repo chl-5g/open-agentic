@@ -12,6 +12,14 @@ sandbox-wasm = []
 sandbox-docker = []
 native = []
 
+credential-vault = []
+credential-keyring = []
+credential-audit = []
+credential-rotation = []
+credential-sqlite = ["dep:rusqlite"]
+
+full-security = ["credential-vault", "credential-keyring", "credential-audit", "credential-rotation", "credential-sqlite"]
+
 [dependencies]
 openclaw-core.workspace = true
 openclaw-security.workspace = true
@@ -26,8 +34,14 @@ chrono.workspace = true
 uuid.workspace = true
 futures.workspace = true
 regex.workspace = true
+aes-gcm.workspace = true
+sha2.workspace = true
+rand.workspace = true
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 wasmtime = "25.0"
 bollard = "0.18"
-sha2 = "0.10"
 base64 = { version = "0.22", features = ["std"] }
+
+[dev-dependencies]
+tempfile.workspace = true

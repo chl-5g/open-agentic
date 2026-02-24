@@ -2,6 +2,33 @@
 //!
 //! 提供凭证边界注入管理
 
+pub mod vault;
+pub mod keyring;
+pub mod encrypted_vault;
+pub mod audit;
+pub mod rotation;
+
+#[cfg(feature = "credential-vault")]
+pub use vault::{Vault, VaultError, memory::MemoryVault};
+
+#[cfg(all(feature = "credential-vault", feature = "credential-sqlite"))]
+pub use vault::sqlite::SqliteVault;
+
+#[cfg(not(feature = "credential-vault"))]
+pub use vault::{Vault, VaultError};
+
+#[cfg(feature = "credential-keyring")]
+pub use keyring::{Keyring, KeyringError, system::SystemKeyring};
+
+#[cfg(feature = "credential-vault")]
+pub use encrypted_vault::{EncryptedVault, AesKeyGenerator};
+
+#[cfg(feature = "credential-audit")]
+pub use audit::{AuditLogger, AuditEntry, AuditAction, AuditResult, InMemoryAuditLogger};
+
+#[cfg(feature = "credential-rotation")]
+pub use rotation::{CredentialRotator, RotationResult};
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
