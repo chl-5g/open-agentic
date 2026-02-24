@@ -29,50 +29,30 @@ pub mod embedded;
 pub mod platform;
 pub mod registry;
 
-// HAL 硬件抽象层
 pub mod hal;
 
-// 框架集成层
 pub mod framework;
 
-// 模块管理器
 pub mod modules;
 
-// 统一设备管理器
 pub mod unified_manager;
 
-pub use camera::*;
-pub use location::*;
-pub use nodes::*;
-pub use notification::*;
-pub use screen::*;
-pub use system::*;
-pub use unified_manager::*;
-
-pub use adapter::*;
-pub use capabilities::*;
-pub use config::*;
-pub use device::*;
-pub use device_trait::*;
-pub use embedded::*;
-pub use platform::*;
-pub use registry::*;
-
-// HAL 硬件抽象层导出
-pub use hal::gpio::*;
-pub use hal::i2c::*;
-pub use hal::serial::*;
-pub use hal::spi::*;
-pub use hal::*;
-
-// 框架集成层导出
-pub use framework::can::*;
-pub use framework::mqtt::*;
-pub use framework::ros2::*;
-pub use framework::*;
-
-// 模块管理器导出
-pub use modules::*;
+pub use registry::DeviceRegistry;
+pub use unified_manager::UnifiedDeviceManager;
+pub use capabilities::DeviceCapabilities;
+pub use registry::DeviceHandle;
+pub use config::DevicesConfig;
+pub use config::CustomDeviceConfig;
+pub use platform::Platform;
+pub use platform::ComputeCategory;
+pub use device::DeviceStatus;
+pub use device_trait::DeviceConfig;
+pub use device_trait::DeviceBuilder;
+pub use unified_manager::DeviceInfo;
+pub use camera::CameraManager;
+pub use screen::ScreenManager;
+pub use capabilities::SensorType;
+pub use unified_manager::DeviceType;
 
 static DEVICE_REGISTRY: std::sync::OnceLock<Arc<registry::DeviceRegistry>> =
     std::sync::OnceLock::new();
@@ -219,6 +199,10 @@ pub fn get_device_registry() -> Option<Arc<registry::DeviceRegistry>> {
 
 pub fn get_or_init_global_registry() -> &'static Arc<registry::DeviceRegistry> {
     DEVICE_REGISTRY.get_or_init(|| Arc::new(registry::DeviceRegistry::new()))
+}
+
+pub fn create_device_registry() -> Arc<registry::DeviceRegistry> {
+    Arc::new(registry::DeviceRegistry::new())
 }
 
 pub async fn get_adapter_config() -> anyhow::Result<adapter::AdapterConfig> {

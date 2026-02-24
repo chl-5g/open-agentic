@@ -23,11 +23,10 @@ pub mod tokenizer;
 pub mod tools;
 pub mod types;
 
-pub use error::*;
-pub use models::*;
-pub use oauth::*;
-pub use providers::*;
-pub use stream::*;
-pub use tokenizer::*;
-pub use tools::*;
-pub use types::*;
+pub use error::{OpenClawError, Result};
+pub use types::{
+    ChatRequest, ChatResponse, EmbeddingRequest, EmbeddingResponse,
+    StreamChunk, ToolDefinition, FinishReason, TokenUsage,
+};
+pub use tools::{ToolCall, ToolResult, ToolExecutor, ToolRegistry, FunctionDefinition};
+pub use providers::{AIProvider, ProviderConfig, ProviderFactory, ProviderType};

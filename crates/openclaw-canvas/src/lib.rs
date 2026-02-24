@@ -7,7 +7,7 @@ pub mod collaboration;
 pub mod draw;
 pub mod types;
 
-pub use canvas::*;
-pub use collaboration::*;
-pub use draw::*;
-pub use types::*;
+pub use canvas::{CanvasInfo, CanvasManager, CanvasOps};
+pub use collaboration::{CollabEvent, CollabManager, CollabSession, UserInfo, UserColorGenerator, WsMessage};
+pub use draw::DrawAction;
+pub use types::{CanvasState, Color, Element, ElementUpdate, UserCursor, CanvasId};

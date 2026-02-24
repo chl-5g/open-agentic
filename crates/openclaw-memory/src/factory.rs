@@ -5,6 +5,7 @@ use openclaw_ai::AIProvider;
 use openclaw_core::Result;
 use openclaw_vector::VectorStore;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::ai_adapter::AIProviderEmbeddingAdapter;
 use crate::bm25::Bm25Index;
@@ -23,13 +24,13 @@ pub trait MemoryBackend: Send + Sync {
 }
 
 pub struct HybridMemoryBackend {
-    manager: Arc<MemoryManager>,
+    manager: Arc<Mutex<MemoryManager>>,
 }
 
 impl HybridMemoryBackend {
     pub fn new(manager: MemoryManager) -> Self {
         Self {
-            manager: Arc::new(manager),
+            manager: Arc::new(Mutex::new(manager)),
         }
     }
 }
@@ -39,19 +40,23 @@ impl MemoryBackend for HybridMemoryBackend {
     async fn store(&self, memory: MemoryItem) -> Result<()> {
         let content = memory.content.to_text();
         let msg = openclaw_core::Message::user(content);
-        self.manager.add(msg).await
+        let mut manager = self.manager.lock().await;
+        manager.add(msg).await
     }
 
     async fn recall(&self, query: &str) -> Result<RecallResult> {
-        self.manager.recall(query).await
+        let manager = self.manager.lock().await;
+        manager.recall(query).await
     }
 
     async fn add(&self, message: openclaw_core::Message) -> Result<()> {
-        self.manager.add(message).await
+        let mut manager = self.manager.lock().await;
+        manager.add(message).await
     }
 
     async fn retrieve(&self, query: &str, limit: usize) -> Result<MemoryRetrieval> {
-        self.manager.retrieve(query, limit).await
+        let manager = self.manager.lock().await;
+        manager.retrieve(query, limit).await
     }
 }
 

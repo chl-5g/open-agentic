@@ -57,18 +57,39 @@ pub async fn create_memory_store(
             table: table_name.to_string(),
         },
 
+        #[cfg(feature = "lancedb")]
         MemoryBackend::LanceDB { path } => StoreBackend::LanceDB { path },
+        #[cfg(not(feature = "lancedb"))]
+        MemoryBackend::LanceDB { .. } => {
+            return Err(openclaw_core::OpenClawError::Config(
+                "LanceDB backend not enabled. Enable 'lancedb' feature for openclaw-memory".to_string(),
+            ));
+        }
 
+        #[cfg(feature = "qdrant")]
         MemoryBackend::Qdrant { url, collection } => StoreBackend::Qdrant {
             url,
             collection,
             api_key: None,
         },
+        #[cfg(not(feature = "qdrant"))]
+        MemoryBackend::Qdrant { .. } => {
+            return Err(openclaw_core::OpenClawError::Config(
+                "Qdrant backend not enabled. Enable 'qdrant' feature for openclaw-memory".to_string(),
+            ));
+        }
 
+        #[cfg(feature = "pgvector")]
         MemoryBackend::PgVector { url } => StoreBackend::PgVector {
             url,
             table: table_name.to_string(),
         },
+        #[cfg(not(feature = "pgvector"))]
+        MemoryBackend::PgVector { .. } => {
+            return Err(openclaw_core::OpenClawError::Config(
+                "PgVector backend not enabled. Enable 'pgvector' feature for openclaw-memory".to_string(),
+            ));
+        }
     };
 
     create_store_async(store_backend).await

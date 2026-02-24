@@ -4,13 +4,6 @@
 //! - 工作记忆 (Working Memory): 最近消息，高优先级
 //! - 短期记忆 (Short-term Memory): 压缩摘要，中优先级
 //! - 长期记忆 (Long-term Memory): 向量存储，低优先级
-//!
-//! 同时支持 OpenClaw 风格的 Markdown 记忆系统：
-//! - AGENTS.md: 智能体操作指南
-//! - SOUL.md: 个性设定
-//! - USER.md: 用户信息
-//! - memory/YYYY-MM-DD.md: 每日记忆
-//! - MEMORY.md: 长期记忆汇总
 
 pub mod factory;
 pub mod ai_adapter;
@@ -35,38 +28,28 @@ pub mod recall;
 pub mod recall_strategy;
 pub mod scorer;
 pub mod store;
+pub mod schema;
 pub mod traits;
 pub mod types;
 pub mod unified_search;
 
-pub use checkpoint::*;
-pub use checkpoint_store::*;
-pub use file_watcher::*;
 pub mod working;
 pub mod workspace;
 pub mod workspace_config;
 
-pub use ai_adapter::*;
-pub use bm25::*;
-pub use chunk::*;
-pub use compressor::*;
-pub use config::*;
-pub use factory::*;
-pub use conflict_resolver::*;
-pub use embedding::*;
-pub use fact_extractor::*;
-pub use file_tracker::*;
-pub use hybrid_search::*;
-pub use knowledge_graph::*;
-pub use maintenance_scheduler::*;
-pub use manager::*;
-pub use pruning::*;
-pub use recall::*;
-pub use recall_strategy::*;
-pub use scorer::*;
-pub use store::*;
-pub use traits::*;
-pub use types::*;
-pub use working::*;
-pub use workspace::*;
+pub use config::{create_memory_store, create_memory_store_from_config, create_embedding_provider_from_config, MemoryBackend as MemoryStoreBackend};
+pub use factory::{MemoryBackend, HybridMemoryBackend, MemoryManagerFactory, HybridMemoryFactory};
+pub use manager::MemoryManager;
+pub use types::{MemoryConfig, MemoryContent, MemoryItem, MemoryLevel, MemoryRetrieval};
+pub use recall::{MemoryRecall, RecallResult, RecallConfig, SimpleMemoryRecall};
+pub use scorer::ImportanceScorer;
+pub use compressor::MemoryCompressor;
+pub use working::WorkingMemory;
 pub use workspace_config::{WorkspaceConfig, WorkspacesConfig};
+
+pub use bm25::Bm25Index;
+pub use chunk::ChunkManager;
+pub use file_tracker::{FileTracker, FileTrackerConfig};
+pub use recall_strategy::{RecallStrategy, RecallItem};
+pub use workspace::AgentWorkspace;
+pub use schema::{CONTENT, TEXT_PREVIEW, EMBEDDING, TIMESTAMP, MEMORY_LEVEL, MEMORY_ID, CATEGORY, SOURCE, IMPORTANCE, TAGS, METADATA};

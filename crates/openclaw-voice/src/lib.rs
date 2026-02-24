@@ -26,11 +26,11 @@ pub mod voice_agent;
 pub mod wake;
 
 pub use audio::{AudioPlayer, AudioUtils};
-pub use config::*;
-pub use provider::{CustomProviderConfig, CustomSttConfig, CustomTtsConfig, ProviderRegistry};
-pub use stt::*;
-pub use talk_mode::*;
-pub use tts::*;
-pub use types::*;
-pub use voice_agent::*;
-pub use wake::*;
+pub use config::{VoiceConfigManager, default_voice_config};
+pub use provider::ProviderRegistry;
+pub use stt::{SpeechToText, create_stt};
+pub use talk_mode::{TalkMode, TalkModeBuilder, TalkModeConfig, TalkModeEvent};
+pub use tts::{TextToSpeech, create_tts};
+pub use voice_agent::VoiceAgent;
+
+pub use types::{SttConfig, SttProvider, TtsConfig, TtsProvider, VoiceConfig, TranscriptionResult, SynthesisOptions};

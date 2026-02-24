@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use async_trait::async_trait;
 
@@ -17,33 +17,40 @@ use openclaw_canvas::CanvasManager;
 use openclaw_channels::{ChannelManager, ChannelMessage, SendMessage, register_default_channels};
 use openclaw_core::{Config, Content, Message, OpenClawError, Result, Role};
 
-use openclaw_memory::factory::MemoryBackend;
+use openclaw_memory::factory::{MemoryBackend, HybridMemoryBackend};
 use openclaw_memory::MemoryConfig;
 use openclaw_memory::MemoryManager;
 use openclaw_security::SecurityPipeline;
 
 struct MemoryManagerAdapter {
-    manager: Arc<MemoryManager>,
+    backend: Arc<HybridMemoryBackend>,
+}
+
+impl MemoryManagerAdapter {
+    fn new(_manager: Arc<MemoryManager>) -> Self {
+        let backend = HybridMemoryBackend::new(MemoryManager::default());
+        Self {
+            backend: Arc::new(backend),
+        }
+    }
 }
 
 #[async_trait]
 impl MemoryBackend for MemoryManagerAdapter {
     async fn store(&self, memory: openclaw_memory::types::MemoryItem) -> openclaw_core::Result<()> {
-        let content = memory.content.to_text();
-        let msg = openclaw_core::Message::user(content);
-        self.manager.add(msg).await
+        self.backend.store(memory).await
     }
 
     async fn recall(&self, query: &str) -> openclaw_core::Result<openclaw_memory::recall::RecallResult> {
-        self.manager.recall(query).await
+        self.backend.recall(query).await
     }
 
     async fn add(&self, message: openclaw_core::Message) -> openclaw_core::Result<()> {
-        self.manager.add(message).await
+        self.backend.add(message).await
     }
 
     async fn retrieve(&self, query: &str, limit: usize) -> openclaw_core::Result<openclaw_memory::types::MemoryRetrieval> {
-        self.manager.retrieve(query, limit).await
+        self.backend.retrieve(query, limit).await
     }
 }
 
@@ -378,9 +385,7 @@ impl ServiceOrchestrator {
                         as Arc<dyn openclaw_agent::ports::AIPort>;
 
                     let memory_port = mem.as_ref().map(|m| {
-                        let adapter = MemoryManagerAdapter {
-                            manager: m.clone(),
-                        };
+                        let adapter = MemoryManagerAdapter::new(m.clone());
                         Arc::new(MemoryPortAdapter::new(Arc::new(adapter) as Arc<dyn MemoryBackend>))
                             as Arc<dyn openclaw_agent::ports::MemoryPort>
                     });
@@ -440,9 +445,7 @@ impl ServiceOrchestrator {
             }) as Arc<dyn openclaw_agent::ports::AIPort>;
             let memory_port: Option<Arc<dyn openclaw_agent::ports::MemoryPort>> =
                 mem_lock.clone().map(|m| {
-                    let adapter = MemoryManagerAdapter {
-                        manager: m,
-                    };
+                    let adapter = MemoryManagerAdapter::new(m.clone());
                     Arc::new(MemoryPortAdapter::new(Arc::new(adapter) as Arc<dyn MemoryBackend>))
                         as Arc<dyn openclaw_agent::ports::MemoryPort>
                 });
