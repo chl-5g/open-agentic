@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use futures::Stream;
 use futures::StreamExt;
 use openclaw_agent::ports::{
-    AIPort, MemoryEntry, MemoryPort, RecallItem, SecurityCheckResult, SecurityPort, ToolInfo,
-    ToolPort,
+    AIPort, MemoryEntry, MemoryPort, RecallItem, SecurityCheckResult, SecurityPort,
+    ToolInfo, ToolPort,
 };
 use openclaw_ai::{
     AIProvider,
@@ -11,6 +11,7 @@ use openclaw_ai::{
 };
 use openclaw_core::{Content, Message, Result as OpenClawResult};
 use openclaw_memory::MemoryManager;
+use openclaw_sandbox::{SandboxManager, ToolSandboxConfig};
 use openclaw_security::SecurityPipeline;
 use openclaw_tools::ToolRegistry;
 use std::pin::Pin;
@@ -190,11 +191,20 @@ impl SecurityPort for SecurityPipelineAdapter {
 
 pub struct ToolRegistryAdapter {
     registry: Arc<ToolRegistry>,
+    sandbox_manager: Option<Arc<SandboxManager>>,
 }
 
 impl ToolRegistryAdapter {
     pub fn new(registry: Arc<ToolRegistry>) -> Self {
-        Self { registry }
+        Self {
+            registry,
+            sandbox_manager: None,
+        }
+    }
+
+    pub fn with_sandbox(mut self, sandbox_manager: Arc<SandboxManager>) -> Self {
+        self.sandbox_manager = Some(sandbox_manager);
+        self
     }
 }
 
@@ -206,6 +216,52 @@ impl ToolPort for ToolRegistryAdapter {
         arguments: serde_json::Value,
     ) -> OpenClawResult<serde_json::Value> {
         self.registry.execute(tool_name, arguments).await
+    }
+
+    async fn execute_with_sandbox(
+        &self,
+        tool_name: &str,
+        arguments: serde_json::Value,
+        enable_sandbox: bool,
+    ) -> OpenClawResult<serde_json::Value> {
+        if !enable_sandbox {
+            return self.registry.execute(tool_name, arguments).await;
+        }
+
+        let Some(ref sandbox) = self.sandbox_manager else {
+            return self.registry.execute(tool_name, arguments).await;
+        };
+
+        let registry = Arc::new(self.registry.clone());
+        let tool_name = tool_name.to_string();
+        let input = arguments;
+
+        let result = sandbox
+            .execute_with_security(
+                &tool_name,
+                input,
+                None,
+                {
+                    let registry = registry.clone();
+                    let tool_name = tool_name.clone();
+                    move |args, _caps| {
+                        let registry = registry.clone();
+                        let tool_name = tool_name.clone();
+                        async move {
+                            registry
+                                .execute(&tool_name, args)
+                                .await
+                                .map_err(|e| e.to_string())
+                        }
+                    }
+                },
+            )
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Tool(e.to_string()))?;
+
+        let output = serde_json::from_str(&result.stdout)
+            .map_err(|e| openclaw_core::OpenClawError::Tool(format!("Failed to parse output: {}", e)))?;
+        Ok(output)
     }
 
     async fn list_tools(&self) -> OpenClawResult<Vec<ToolInfo>> {

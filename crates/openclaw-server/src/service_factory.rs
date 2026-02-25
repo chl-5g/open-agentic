@@ -13,6 +13,7 @@ use openclaw_device::UnifiedDeviceManager;
 use openclaw_memory::factory::{create_memory_backend, MemoryBackend};
 use openclaw_memory::MemoryManager;
 use openclaw_security::pipeline::SecurityPipeline;
+use openclaw_sandbox::SandboxManager;
 use openclaw_tools::ToolRegistry;
 
 use crate::app_context::AppContext;
@@ -244,7 +245,20 @@ impl ServiceFactory for DefaultServiceFactory {
         let tool_registry = self.create_tool_registry();
         let voice_service = Arc::new(VoiceService::new());
 
-        let unified_device_manager = self.create_unified_device_manager().await.ok();
+        let unified_device_manager = match self.create_unified_device_manager().await {
+            Ok(manager) => Some(manager),
+            Err(e) => {
+                tracing::warn!("Failed to create unified device manager: {}", e);
+                None
+            }
+        };
+
+        let sandbox_manager = if self.config.sandbox().enabled {
+            let sandbox = Arc::new(SandboxManager::new());
+            Some(sandbox)
+        } else {
+            None
+        };
 
         let context = AppContext::new(
             config,
@@ -252,6 +266,7 @@ impl ServiceFactory for DefaultServiceFactory {
             memory_backend,
             security_pipeline,
             tool_registry,
+            sandbox_manager,
             orchestrator,
             self.device_manager.clone(),
             unified_device_manager,

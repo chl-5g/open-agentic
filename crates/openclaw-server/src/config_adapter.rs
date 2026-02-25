@@ -120,4 +120,9 @@ impl ConfigAdapter {
     pub fn device(&self) -> DevicesConfig {
         DevicesConfig::default()
     }
+
+    /// 获取沙箱配置
+    pub fn sandbox(&self) -> &openclaw_core::config::SandboxSettings {
+        &self.core.sandbox
+    }
 }

@@ -6027,6 +6027,7 @@ dependencies = [
  "openclaw-core",
  "openclaw-device",
  "openclaw-memory",
+ "openclaw-sandbox",
  "openclaw-security",
  "openclaw-tools",
  "openclaw-vector",

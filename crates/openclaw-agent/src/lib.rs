@@ -24,8 +24,8 @@ pub use aieos::AIEOS;
 pub use config::{AgentDefaults, AgentInstanceConfig, AgentsConfig};
 pub use orchestrator::*;
 pub use ports::{
-    AIPort, MemoryEntry, MemoryPort, RecallItem, SecurityCheckResult, SecurityPort, ToolInfo,
-    ToolPort, DevicePort,
+    AIPort, MemoryEntry, MemoryPort, RecallItem, SecurityCheckResult, SecurityPort,
+    ToolInfo, ToolPort, DevicePort,
 };
 pub use provider::*;
 pub use sessions::*;

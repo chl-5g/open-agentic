@@ -186,6 +186,15 @@ impl ToolPort for ToolPortAdapter {
         }
     }
 
+    async fn execute_with_sandbox(
+        &self,
+        tool_name: &str,
+        arguments: serde_json::Value,
+        _enable_sandbox: bool,
+    ) -> OpenClawResult<serde_json::Value> {
+        self.execute(tool_name, arguments).await
+    }
+
     async fn list_tools(&self) -> OpenClawResult<Vec<ToolInfo>> {
         let all_skills = self.registry.get_all_skills();
         Ok(all_skills

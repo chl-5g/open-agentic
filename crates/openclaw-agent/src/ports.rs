@@ -64,6 +64,13 @@ pub trait ToolPort: Send + Sync {
         arguments: serde_json::Value,
     ) -> Result<serde_json::Value>;
 
+    async fn execute_with_sandbox(
+        &self,
+        tool_name: &str,
+        arguments: serde_json::Value,
+        enable_sandbox: bool,
+    ) -> Result<serde_json::Value>;
+
     async fn list_tools(&self) -> Result<Vec<ToolInfo>>;
 }
 

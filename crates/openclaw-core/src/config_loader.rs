@@ -324,6 +324,7 @@ impl UnifiedConfig {
             security: security_config,
             voice: None,
             browser: None,
+            sandbox: crate::config::SandboxSettings::default(),
         }
     }
 }

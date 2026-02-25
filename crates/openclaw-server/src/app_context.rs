@@ -8,6 +8,7 @@ use openclaw_core::Config;
 use openclaw_device::UnifiedDeviceManager;
 use openclaw_memory::factory::MemoryBackend;
 use openclaw_security::pipeline::SecurityPipeline;
+use openclaw_sandbox::SandboxManager;
 use openclaw_tools::ToolRegistry;
 
 use crate::device_manager::DeviceManager;
@@ -22,6 +23,7 @@ pub struct AppContext {
     pub memory_backend: Option<Arc<dyn MemoryBackend>>,
     pub security_pipeline: Arc<SecurityPipeline>,
     pub tool_registry: Arc<ToolRegistry>,
+    pub sandbox_manager: Option<Arc<SandboxManager>>,
     pub orchestrator: Arc<RwLock<Option<ServiceOrchestrator>>>,
     pub device_manager: Option<Arc<DeviceManager>>,
     pub unified_device_manager: Option<Arc<UnifiedDeviceManager>>,
@@ -36,6 +38,7 @@ impl AppContext {
         memory_backend: Option<Arc<dyn MemoryBackend>>,
         security_pipeline: Arc<SecurityPipeline>,
         tool_registry: Arc<ToolRegistry>,
+        sandbox_manager: Option<Arc<SandboxManager>>,
         orchestrator: Arc<RwLock<Option<ServiceOrchestrator>>>,
         device_manager: Option<Arc<DeviceManager>>,
         unified_device_manager: Option<Arc<UnifiedDeviceManager>>,
@@ -48,6 +51,7 @@ impl AppContext {
             memory_backend,
             security_pipeline,
             tool_registry,
+            sandbox_manager,
             orchestrator,
             device_manager,
             unified_device_manager,

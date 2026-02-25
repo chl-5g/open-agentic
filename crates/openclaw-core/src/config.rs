@@ -26,6 +26,9 @@ pub struct Config {
     /// 浏览器配置
     #[serde(default)]
     pub browser: Option<serde_json::Value>,
+    /// 沙箱配置
+    #[serde(default)]
+    pub sandbox: SandboxSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -414,6 +417,14 @@ impl Default for SecurityConfig {
             stuck_timeout: Duration::from_secs(30),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SandboxSettings {
+    pub enabled: bool,
+    pub default_type: String,
+    pub timeout_secs: u64,
+    pub memory_limit_mb: u64,
 }
 
 /// 智能体设置 (保留用于未来扩展)
