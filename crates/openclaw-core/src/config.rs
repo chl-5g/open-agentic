@@ -419,12 +419,23 @@ impl Default for SecurityConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxSettings {
     pub enabled: bool,
     pub default_type: String,
     pub timeout_secs: u64,
     pub memory_limit_mb: u64,
+}
+
+impl Default for SandboxSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_type: "wasm".to_string(),
+            timeout_secs: 30,
+            memory_limit_mb: 64,
+        }
+    }
 }
 
 /// 智能体设置 (保留用于未来扩展)
