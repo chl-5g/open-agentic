@@ -52,8 +52,8 @@ openclaw-rust/
 
 ### 支持的 AI 提供商
 
-- **国际**: OpenAI, Anthropic (Claude), Google (Gemini), DeepSeek
-- **国内**: 通义千问 (Qwen), 智谱 GLM, Moonshot (Kimi), 豆包 (Doubao), MiniMax
+- **国际**: OpenAI, Anthropic (Claude), Google (Gemini)
+- **国内**: 通义千问 (Qwen), 智谱 GLM, Moonshot (Kimi), 豆包 (Doubao), MiniMax, DeepSeek
 - **本地**: Ollama (本地大模型)
 - **自定义**: OpenAI 兼容 API
 
@@ -68,11 +68,11 @@ openclaw-rust/
 
 ### 国际平台
 
-Telegram | Discord | Slack | Microsoft Teams | WhatsApp | Signal
+Telegram | Discord | Slack | Microsoft Teams | WhatsApp | Signal | Zalo (越南)
 
 ### 国内平台
 
-钉钉 | 企业微信 | 飞书 | Zalo (越南)
+钉钉 | 企业微信 | 飞书
 
 ### macOS
 
@@ -180,6 +180,33 @@ cargo run -- doctor
   "server": {
     "host": "0.0.0.0",
     "port": 18789
+  },
+  "sandbox": {
+    "enabled": false,
+    "default_type": "wasm",
+    "timeout_secs": 30,
+    "memory_limit_mb": 64
+  }
+}
+```
+
+### 安全沙箱配置
+
+OpenClaw 支持三种沙箱执行模式：
+
+| 模式 | 描述 | 适用场景 |
+|------|------|---------|
+| `wasm` | WASM 轻量沙箱 (推荐) | 高安全隔离，资源受限 |
+| `docker` | Docker 容器隔离 | 需要完整系统权限 |
+| `native` | 直接执行 (无隔离) | 开发调试 |
+
+启用沙箱可获得与 IronClaw 同等的安全隔离：
+
+```json
+{
+  "sandbox": {
+    "enabled": true,
+    "default_type": "wasm"
   }
 }
 ```
