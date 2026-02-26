@@ -66,7 +66,9 @@ impl VectorStoreRegistry {
         qdrant_config: Option<&QdrantConfig>,
         lancedb_config: Option<&LanceDbConfig>,
         milvus_config: Option<&MilvusConfig>,
-    ) {
+    ) -> std::io::Result<()> {
+        let mut errors = Vec::new();
+
         for name in backends {
             if let Some(factory) = get_factory(name) {
                 let config = self.build_backend_config(name, backend_type, qdrant_config, lancedb_config, milvus_config);
@@ -75,12 +77,25 @@ impl VectorStoreRegistry {
                         self.register(name.clone(), store).await;
                     }
                     Err(e) => {
-                        tracing::warn!("Failed to create vector store '{}': {}", name, e);
+                        let err_msg = format!("Failed to create vector store '{}': {}", name, e);
+                        tracing::warn!("{}", err_msg);
+                        errors.push(err_msg);
                     }
                 }
             } else {
-                tracing::warn!("No factory registered for vector store '{}'", name);
+                let err_msg = format!("No factory registered for vector store '{}'", name);
+                tracing::warn!("{}", err_msg);
+                errors.push(err_msg);
             }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                errors.join("; "),
+            ))
         }
     }
 

@@ -21,7 +21,7 @@ chrono.workspace = true
 uuid.workspace = true
 tiktoken-rs.workspace = true
 tempfile.workspace = true
-regex = "1.11"
-reqwest = { version = "0.12", features = ["json"] }
+regex.workspace = true
+reqwest = { workspace = true, features = ["json"] }
 tantivy = "0.22"
 walkdir = "2"

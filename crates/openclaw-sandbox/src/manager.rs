@@ -30,6 +30,7 @@ pub struct ToolSandboxConfig {
     pub memory_limit_mb: u64,
     pub allow_network: bool,
     pub allowed_paths: Vec<String>,
+    pub mock_mode: bool,
 }
 
 impl Default for ToolSandboxConfig {
@@ -41,6 +42,7 @@ impl Default for ToolSandboxConfig {
             memory_limit_mb: 256,
             allow_network: false,
             allowed_paths: vec![],
+            mock_mode: false,
         }
     }
 }
@@ -144,6 +146,7 @@ impl SandboxManager {
                 memory_limit_mb: 512,
                 allow_network: true,
                 allowed_paths: vec![],
+                mock_mode: false,
             },
         );
 
@@ -156,6 +159,7 @@ impl SandboxManager {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec!["./workspace/*".to_string(), "./data/*".to_string()],
+                mock_mode: false,
             },
         );
 
@@ -168,6 +172,7 @@ impl SandboxManager {
                 memory_limit_mb: 64,
                 allow_network: true,
                 allowed_paths: vec![],
+                mock_mode: false,
             },
         );
 
@@ -180,6 +185,7 @@ impl SandboxManager {
                 memory_limit_mb: 64,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             },
         );
 
@@ -192,6 +198,7 @@ impl SandboxManager {
                 memory_limit_mb: 1024,
                 allow_network: true,
                 allowed_paths: vec![],
+                mock_mode: false,
             },
         );
 
@@ -286,6 +293,18 @@ impl SandboxManager {
             .get_tool_config(tool_id)
             .await
             .ok_or_else(|| SandboxError::ToolNotFound(tool_id.to_string()))?;
+
+        if config.mock_mode {
+            warn!("Tool {} running in MOCK mode - not executing real sandbox", tool_id);
+            return Ok(ExecutionResult {
+                exit_code: 0,
+                stdout: format!("[MOCK] {}: {}", tool_id, input),
+                stderr: String::new(),
+                timed_out: false,
+                duration_secs: 0.0,
+                resource_usage: None,
+            });
+        }
 
         self.check_security(tool_id, input, target.unwrap_or(""))
             .await?;
@@ -477,6 +496,7 @@ mod tests {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         
@@ -533,6 +553,7 @@ mod tests {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         
@@ -572,6 +593,7 @@ mod tests {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         
@@ -616,6 +638,7 @@ mod integration_tests {
                 memory_limit_mb: 64,
                 allow_network: true,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         
@@ -654,6 +677,7 @@ mod integration_tests {
                 memory_limit_mb: 512,
                 allow_network: true,
                 allowed_paths: vec!["./workspace/*".to_string()],
+                mock_mode: false,
             })
             .await;
         
@@ -692,6 +716,7 @@ mod integration_tests {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         
@@ -730,6 +755,7 @@ mod integration_tests {
                 memory_limit_mb: 256,
                 allow_network: false,
                 allowed_paths: vec![],
+                mock_mode: false,
             })
             .await;
         

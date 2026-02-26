@@ -14,7 +14,7 @@ use openclaw_memory::factory::{create_memory_backend, MemoryBackend};
 use openclaw_memory::MemoryManager;
 use openclaw_security::pipeline::SecurityPipeline;
 use openclaw_sandbox::SandboxManager;
-use openclaw_tools::ToolRegistry;
+use openclaw_tools::{ToolRegistry, register_builtin_tools};
 
 use crate::app_context::AppContext;
 use crate::orchestrator::OrchestratorConfig;
@@ -126,6 +126,8 @@ impl ServiceFactory for DefaultServiceFactory {
         use crate::hardware_tools::CameraTool;
 
         let mut registry = ToolRegistry::new();
+
+        register_builtin_tools(&mut registry);
 
         if let Some(ref device_manager) = self.device_manager {
             let capabilities = device_manager.get_capabilities();

@@ -17,18 +17,16 @@ anyhow.workspace = true
 tracing.workspace = true
 chrono.workspace = true
 uuid.workspace = true
-# lancedb.workspace = true  # 暂时移除
-# qdrant-client.workspace = true  # 暂时移除
-rusqlite.workspace = true
-lancedb.workspace = true
-qdrant-client.workspace = true
-sqlx.workspace = true
-milvus.workspace = true
+rusqlite = { workspace = true, optional = true }
+lancedb = { workspace = true, optional = true }
+qdrant-client = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+milvus = { workspace = true, optional = true }
 
 [features]
 default = []
-lancedb = []
-qdrant = []
-pgvector = []
-milvus = []
-sqlite = []
+lancedb = ["dep:lancedb"]
+qdrant = ["dep:qdrant-client"]
+pgvector = ["dep:sqlx"]
+milvus = ["dep:milvus"]
+sqlite = ["dep:rusqlite"]

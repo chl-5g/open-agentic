@@ -33,6 +33,9 @@ pub async fn run(fix: bool, verbose: bool) -> Result<()> {
     results.push(check_api_keys());
     results.push(check_dependencies());
     results.push(check_docker());
+    results.push(check_podman());
+    results.push(check_wasmtime());
+    results.push(check_audio_devices());
     results.push(check_chrome());
     results.push(check_ports());
 
@@ -255,6 +258,153 @@ fn check_docker() -> CheckResult {
             message: "未安装 (可选，用于沙箱功能)".to_string(),
             fix_hint: Some("访问 https://docs.docker.com/get-docker/ 安装 Docker".to_string()),
         },
+    }
+}
+
+/// 检查 Podman
+fn check_podman() -> CheckResult {
+    let output = Command::new("podman").arg("--version").output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout);
+
+            let running = Command::new("podman")
+                .args(["info"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+
+            if running {
+                CheckResult {
+                    name: "Podman".to_string(),
+                    status: CheckStatus::Ok,
+                    message: version.trim().to_string(),
+                    fix_hint: None,
+                }
+            } else {
+                CheckResult {
+                    name: "Podman".to_string(),
+                    status: CheckStatus::Warning,
+                    message: "已安装但未运行".to_string(),
+                    fix_hint: Some("运行 `podman machine start`".to_string()),
+                }
+            }
+        }
+        _ => CheckResult {
+            name: "Podman".to_string(),
+            status: CheckStatus::Ok,
+            message: "未安装 (可选，Docker 优先)".to_string(),
+            fix_hint: None,
+        },
+    }
+}
+
+/// 检查 WASM Runtime (wasmtime)
+fn check_wasmtime() -> CheckResult {
+    let output = Command::new("wasmtime").arg("--version").output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            CheckResult {
+                name: "WASM Runtime (wasmtime)".to_string(),
+                status: CheckStatus::Ok,
+                message: version.trim().to_string(),
+                fix_hint: None,
+            }
+        }
+        _ => CheckResult {
+            name: "WASM Runtime (wasmtime)".to_string(),
+            status: CheckStatus::Warning,
+            message: "未安装 (可选，用于 WASM 沙箱)".to_string(),
+            fix_hint: Some("运行 `curl https://wasmtime.dev/install.sh -sSf | bash` 安装".to_string()),
+        },
+    }
+}
+
+/// 检查音频设备
+fn check_audio_devices() -> CheckResult {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("system_profiler")
+            .args(["SPAudioDataType"])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                let info = String::from_utf8_lossy(&output.stdout);
+                if info.contains("No audio devices found") || info.is_empty() {
+                    return CheckResult {
+                        name: "音频设备".to_string(),
+                        status: CheckStatus::Warning,
+                        message: "未检测到音频设备".to_string(),
+                        fix_hint: Some("检查麦克风/扬声器连接".to_string()),
+                    };
+                } else {
+                    return CheckResult {
+                        name: "音频设备".to_string(),
+                        status: CheckStatus::Ok,
+                        message: "已检测到音频设备".to_string(),
+                        fix_hint: None,
+                    };
+                }
+            }
+            _ => {
+                return CheckResult {
+                    name: "音频设备".to_string(),
+                    status: CheckStatus::Warning,
+                    message: "无法检测音频设备".to_string(),
+                    fix_hint: None,
+                };
+            },
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("pactl")
+            .args(["list", "short", "sources"])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                let info = String::from_utf8_lossy(&output.stdout);
+                if info.is_empty() {
+                    return CheckResult {
+                        name: "音频设备".to_string(),
+                        status: CheckStatus::Warning,
+                        message: "未检测到音频设备".to_string(),
+                        fix_hint: Some("检查麦克风连接并安装 pulseaudio".to_string()),
+                    };
+                } else {
+                    return CheckResult {
+                        name: "音频设备".to_string(),
+                        status: CheckStatus::Ok,
+                        message: "已检测到音频设备".to_string(),
+                        fix_hint: None,
+                    };
+                }
+            }
+            _ => {
+                return CheckResult {
+                    name: "音频设备".to_string(),
+                    status: CheckStatus::Warning,
+                    message: "无法检测音频设备".to_string(),
+                    fix_hint: None,
+                };
+            },
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        CheckResult {
+            name: "音频设备".to_string(),
+            status: CheckStatus::Ok,
+            message: "跳过检测 (不支持的平台)".to_string(),
+            fix_hint: None,
+        }
     }
 }
 

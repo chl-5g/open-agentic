@@ -8,19 +8,23 @@ use openclaw_memory::types::MemoryConfig;
 use openclaw_security::pipeline::PipelineConfig;
 use std::sync::Arc;
 
-/// 统一配置适配器 - 将 Core Config 转换为各模块配置
 pub struct ConfigAdapter {
     core: Arc<CoreConfig>,
+    devices: Arc<DevicesConfig>,
 }
 
 impl ConfigAdapter {
-    pub fn new(core: Arc<CoreConfig>) -> Self {
-        Self { core }
+    pub fn new(core: CoreConfig, devices: DevicesConfig) -> Self {
+        Self {
+            core: Arc::new(core),
+            devices: Arc::new(devices),
+        }
     }
 
     pub fn from_ref(core: &CoreConfig) -> Self {
         Self {
             core: Arc::new(core.clone()),
+            devices: Arc::new(DevicesConfig::default()),
         }
     }
 
@@ -118,7 +122,7 @@ impl ConfigAdapter {
 
     /// 获取设备配置
     pub fn device(&self) -> DevicesConfig {
-        DevicesConfig::default()
+        (*self.devices).clone()
     }
 
     /// 获取沙箱配置

@@ -47,6 +47,10 @@ static FACTORY_REGISTRY: Mutex<Vec<FactoryPtr>> = Mutex::new(Vec::new());
 
 pub fn register_factory(factory: FactoryPtr) {
     if let Ok(mut registry) = FACTORY_REGISTRY.lock() {
+        if registry.iter().any(|f| f.name() == factory.name()) {
+            tracing::debug!("Factory '{}' already registered, skipping", factory.name());
+            return;
+        }
         registry.push(factory);
     }
 }

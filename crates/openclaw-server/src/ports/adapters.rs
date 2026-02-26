@@ -14,8 +14,8 @@ use openclaw_memory::factory::MemoryBackend;
 use openclaw_memory::MemoryManager;
 use openclaw_memory::recall::{RecallItem as MemoryRecallItem, RecallResult as MemoryRecallResult};
 use openclaw_memory::types::{MemoryContent, MemoryItem, MemoryRetrieval};
-use openclaw_security::SecurityPipeline;
-use openclaw_tools::SkillRegistry;
+use openclaw_security::{SecurityPipeline, PipelineResult};
+use openclaw_tools::ToolRegistry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
@@ -138,7 +138,22 @@ impl MemoryPort for MemoryPortAdapter {
     }
 
     async fn get_context(&self) -> OpenClawResult<Vec<Message>> {
-        Ok(vec![])
+        let retrieval = self.backend.retrieve("", 10).await?;
+        let messages: Vec<Message> = retrieval
+            .items
+            .into_iter()
+            .map(|item| {
+                let text = item.content.to_text();
+                Message {
+                    id: item.id,
+                    role: Role::User,
+                    content: vec![Content::Text { text }],
+                    created_at: item.created_at,
+                    metadata: Default::default(),
+                }
+            })
+            .collect();
+        Ok(messages)
     }
 }
 
@@ -148,16 +163,34 @@ pub struct SecurityPortAdapter {
 
 #[async_trait]
 impl SecurityPort for SecurityPortAdapter {
-    async fn check(&self, _input: &str) -> OpenClawResult<SecurityCheckResult> {
-        Ok(SecurityCheckResult {
-            allowed: true,
-            reason: None,
-        })
+    async fn check(&self, input: &str) -> OpenClawResult<SecurityCheckResult> {
+        let (result, _) = self.pipeline.check_input("security_port", input).await;
+
+        match result {
+            PipelineResult::Allow => Ok(SecurityCheckResult {
+                allowed: true,
+                reason: None,
+            }),
+            PipelineResult::Block(reason) => Ok(SecurityCheckResult {
+                allowed: false,
+                reason: Some(reason),
+            }),
+            PipelineResult::Warn(warning) => Ok(SecurityCheckResult {
+                allowed: true,
+                reason: Some(warning),
+            }),
+        }
     }
 }
 
 pub struct ToolPortAdapter {
-    pub registry: Arc<SkillRegistry>,
+    pub registry: Arc<ToolRegistry>,
+}
+
+impl ToolPortAdapter {
+    pub fn new(registry: Arc<ToolRegistry>) -> Self {
+        Self { registry }
+    }
 }
 
 #[async_trait]
@@ -167,23 +200,14 @@ impl ToolPort for ToolPortAdapter {
         tool_name: &str,
         arguments: serde_json::Value,
     ) -> OpenClawResult<serde_json::Value> {
-        let all_skills = self.registry.get_all_skills();
-        let skill_found = all_skills
-            .iter()
-            .any(|s| s.id == tool_name || s.name == tool_name);
-
-        if skill_found {
-            Ok(serde_json::json!({
-                "executed": tool_name,
-                "params": arguments,
-                "status": "simulated"
-            }))
-        } else {
-            Err(OpenClawError::Tool(format!(
+        if !self.registry.has_tool(tool_name) {
+            return Err(OpenClawError::Tool(format!(
                 "Tool '{}' not found or not available",
                 tool_name
-            )))
+            )));
         }
+
+        self.registry.execute(tool_name, arguments).await
     }
 
     async fn execute_with_sandbox(
@@ -196,15 +220,18 @@ impl ToolPort for ToolPortAdapter {
     }
 
     async fn list_tools(&self) -> OpenClawResult<Vec<ToolInfo>> {
-        let all_skills = self.registry.get_all_skills();
-        Ok(all_skills
-            .into_iter()
-            .map(|s| ToolInfo {
-                name: s.name.clone(),
-                description: s.description.clone(),
-                parameters: serde_json::json!({}),
-            })
-            .collect())
+        let tool_names = self.registry.list_tools();
+        let mut tools = Vec::new();
+        for name in tool_names {
+            if let Some(tool) = self.registry.get(&name) {
+                tools.push(ToolInfo {
+                    name: tool.name().to_string(),
+                    description: tool.description().to_string(),
+                    parameters: serde_json::json!({}),
+                });
+            }
+        }
+        Ok(tools)
     }
 }
 

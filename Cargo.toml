@@ -45,7 +45,7 @@ serde_qs = "0.12"
 serde_yaml = "0.9"
 
 # Testing
-tempfile = "3.8"
+tempfile = "3.14"
 
 # Error handling
 thiserror = "2.0"
@@ -117,6 +117,9 @@ mockall = "0.13"
 
 # WASM
 wasmtime = "25.0"
+
+# OS paths
+dirs = "6.0"
 
 # Internal crates
 openclaw-core = { path = "crates/openclaw-core" }

@@ -25,8 +25,7 @@ impl ServerConfig {
     }
 
     pub fn load(config_dir: &Path) -> std::io::Result<Self> {
-        let core = CoreConfig::from_file(&config_dir.join("config.yaml"))
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let core = Self::load_core_config(config_dir)?;
 
         let agents = load_yaml_config(config_dir.join("agents.yaml"))
             .unwrap_or_default();
@@ -41,6 +40,25 @@ impl ServerConfig {
             devices,
             workspaces,
         })
+    }
+
+    fn load_core_config(config_dir: &Path) -> std::io::Result<CoreConfig> {
+        // 优先加载 config.json
+        let json_path = config_dir.join("config.json");
+        if json_path.exists() {
+            return CoreConfig::from_file(&json_path)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+        }
+
+        // 回退到旧的 openclaw.json（向后兼容）
+        let legacy_path = config_dir.join("openclaw.json");
+        if legacy_path.exists() {
+            return CoreConfig::from_file(&legacy_path)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e));
+        }
+
+        // 返回默认配置
+        Ok(CoreConfig::default())
     }
 
     pub fn load_or_default(config_dir: &Path) -> Self {

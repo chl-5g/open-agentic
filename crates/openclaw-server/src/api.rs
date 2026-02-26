@@ -4,6 +4,8 @@ use axum::{
     Json, Router,
     extract::{Path, Query, State},
     routing::{delete, get, post},
+    response::{IntoResponse, Response},
+    http::StatusCode,
 };
 use openclaw_agent::{Agent, AgentType, BaseAgent};
 use openclaw_browser::BrowserConfig;
@@ -21,6 +23,19 @@ use crate::orchestrator::ServiceOrchestrator;
 use crate::sse::error_string_stream_to_sse;
 use crate::voice_service::VoiceService;
 
+#[derive(Debug, Serialize)]
+pub struct ApiError {
+    pub error: String,
+    pub code: u16,
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let status = StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        (status, Json(self)).into_response()
+    }
+}
+
 pub fn create_router(
     context: Arc<AppContext>,
     canvas_manager: Option<Arc<CanvasManager>>,
@@ -28,12 +43,7 @@ pub fn create_router(
 ) -> Router {
     let state = Arc::new(RwLock::new(ApiState::new(context.clone())));
 
-    let canvas_state = match canvas_manager {
-        Some(manager) => CanvasApiState::with_manager(manager),
-        None => CanvasApiState::new(),
-    };
-
-    Router::new()
+    let mut router = Router::new()
         .route("/health", get(health_check))
         .route("/chat", post(chat_handler))
         .route("/chat/stream", get(chat_stream_handler))
@@ -51,10 +61,19 @@ pub fn create_router(
         .route("/api/agent/message", post(send_agent_message))
         .route("/api/presence", get(get_presence).post(set_presence))
         .with_state(state)
-        .merge(create_canvas_router(canvas_state))
-        .merge(create_browser_router(BrowserApiState::new(browser_config)))
         .merge(create_device_router(context.unified_device_manager.clone()))
-        .merge(create_agentic_rag_router())
+        .merge(create_agentic_rag_router());
+
+    if let Some(canvas_mgr) = canvas_manager {
+        let canvas_state = CanvasApiState::with_manager(canvas_mgr);
+        router = router.merge(create_canvas_router(canvas_state));
+    }
+
+    if browser_config.is_some() {
+        router = router.merge(create_browser_router(BrowserApiState::new(browser_config)));
+    }
+
+    router
 }
 
 #[derive(Clone)]
@@ -73,12 +92,6 @@ impl ApiState {
             voice_service: context.voice_service.clone(),
             context,
         }
-    }
-}
-
-impl Default for ApiState {
-    fn default() -> Self {
-        panic!("ApiState::default() is not supported, use ApiState::new() with AppContext");
     }
 }
 
@@ -193,7 +206,7 @@ pub struct TokenUsage {
 async fn chat_handler(
     State(state): State<Arc<RwLock<ApiState>>>,
     Json(request): Json<ChatRequest>,
-) -> Json<ChatResponse> {
+) -> Result<Json<ChatResponse>, ApiError> {
     let session_id = request
         .session_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
@@ -225,7 +238,7 @@ async fn chat_handler(
 
         match result {
             Ok(reply) => {
-                return Json(ChatResponse {
+                Ok(Json(ChatResponse {
                     reply,
                     session_id,
                     model: request.model.unwrap_or_else(|| "gpt-4".to_string()),
@@ -233,31 +246,21 @@ async fn chat_handler(
                         prompt_tokens: 0,
                         completion_tokens: 0,
                     },
-                });
+                }))
             }
             Err(e) => {
-                return Json(ChatResponse {
-                    reply: format!("Error: {}", e),
-                    session_id,
-                    model: request.model.unwrap_or_else(|| "gpt-4".to_string()),
-                    usage: TokenUsage {
-                        prompt_tokens: 0,
-                        completion_tokens: 0,
-                    },
-                });
+                Err(ApiError {
+                    error: e.to_string(),
+                    code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                })
             }
         }
+    } else {
+        Err(ApiError {
+            error: "No orchestrator available".to_string(),
+            code: StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+        })
     }
-
-    Json(ChatResponse {
-        reply: "Error: No orchestrator available".to_string(),
-        session_id,
-        model: request.model.unwrap_or_else(|| "gpt-4".to_string()),
-        usage: TokenUsage {
-            prompt_tokens: 0,
-            completion_tokens: 0,
-        },
-    })
 }
 
 #[derive(Debug, Serialize)]

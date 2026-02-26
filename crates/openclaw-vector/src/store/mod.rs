@@ -10,6 +10,7 @@ pub mod pgvector;
 #[cfg(feature = "milvus")]
 pub mod milvus;
 mod memory;
+#[cfg(feature = "sqlite")]
 mod sqlite;
 
 pub use factory::*;
@@ -27,6 +28,7 @@ pub use pgvector::PgVectorStore;
 pub use qdrant::QdrantStore;
 #[cfg(feature = "milvus")]
 pub use milvus::MilvusStore;
+#[cfg(feature = "sqlite")]
 pub use sqlite::SqliteStore;
 
 use super::types::{Filter, SearchQuery, SearchResult, StoreStats, VectorItem};
@@ -93,10 +95,15 @@ pub fn create_store(backend: StoreBackend) -> Result<Arc<dyn VectorStore>> {
         StoreBackend::Milvus { .. } => Err(OpenClawError::VectorStore(
             "Milvus requires async initialization. Use create_store_async instead.".to_string(),
         )),
+        #[cfg(feature = "sqlite")]
         StoreBackend::SQLite { path, table } => {
             let store = SqliteStore::new(path, &table)?;
-            Ok(Arc::new(store))
+            Ok(Arc::new(store) as Arc<dyn VectorStore>)
         }
+        #[cfg(not(feature = "sqlite"))]
+        StoreBackend::SQLite { .. } => Err(OpenClawError::VectorStore(
+            "SQLite support not enabled. Enable the 'sqlite' feature.".to_string(),
+        )),
     }
 }
 
@@ -127,9 +134,14 @@ pub async fn create_store_async(backend: StoreBackend) -> Result<Arc<dyn VectorS
             let store: MilvusStore = MilvusStore::new(&url, &collection, dimension.unwrap_or(1536)).await?;
             Ok(Arc::new(store) as Arc<dyn VectorStore>)
         }
+        #[cfg(feature = "sqlite")]
         StoreBackend::SQLite { path, table } => {
             let store: SqliteStore = SqliteStore::new(path, &table)?;
             Ok(Arc::new(store) as Arc<dyn VectorStore>)
         }
+        #[cfg(not(feature = "sqlite"))]
+        StoreBackend::SQLite { .. } => Err(OpenClawError::VectorStore(
+            "SQLite support not enabled. Enable the 'sqlite' feature.".to_string(),
+        )),
     }
 }

@@ -32,9 +32,23 @@ impl Gateway {
         let config_for_adapter = config.core.clone();
         let config_for_device = config.devices.clone();
 
-        let config_adapter = ConfigAdapter::from_ref(&config_for_adapter);
+        let config_adapter = ConfigAdapter::new(config_for_adapter, config_for_device.clone());
         let vector_store_registry =
             Arc::new(crate::vector_store_registry::VectorStoreRegistry::new());
+
+        let backends = config.core.vector.backends.clone().unwrap_or_else(|| vec!["memory".to_string()]);
+        let backend_type = config.core.vector.backend.clone();
+        let qdrant_config = config.core.vector.qdrant.as_ref();
+        let lancedb_config = config.core.vector.lancedb.as_ref();
+        let milvus_config = config.core.vector.milvus.as_ref();
+        
+        if let Err(e) = vector_store_registry
+            .register_from_config(&backends, &backend_type, qdrant_config, lancedb_config, milvus_config)
+            .await
+        {
+            tracing::warn!("Failed to register vector stores from config: {}, using defaults", e);
+        }
+
         let device_manager = if config_for_device.enabled {
             Some(Arc::new(crate::device_manager::DeviceManager::new(config_for_device)))
         } else {
@@ -57,17 +71,6 @@ impl Gateway {
     }
 
     pub async fn start(&self) -> openclaw_core::Result<()> {
-        let backends = self.config.core.vector.backends.clone().unwrap_or_else(|| vec!["memory".to_string()]);
-        let backend_type = self.config.core.vector.backend.clone();
-        let qdrant_config = self.config.core.vector.qdrant.as_ref();
-        let lancedb_config = self.config.core.vector.lancedb.as_ref();
-        let milvus_config = self.config.core.vector.milvus.as_ref();
-        
-        self.context
-            .vector_store_registry
-            .register_from_config(&backends, &backend_type, qdrant_config, lancedb_config, milvus_config)
-            .await;
-
         if let Some(ref device_manager) = self.context.device_manager {
             device_manager.init().await?;
         }

@@ -1,6 +1,6 @@
 //! Agent CLI 工具 - 直接与 AI Assistant 对话
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{ArgAction, Parser};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};

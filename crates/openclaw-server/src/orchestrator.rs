@@ -23,14 +23,13 @@ use openclaw_memory::MemoryManager;
 use openclaw_security::SecurityPipeline;
 
 struct MemoryManagerAdapter {
-    backend: Arc<HybridMemoryBackend>,
+    manager: Arc<Mutex<MemoryManager>>,
 }
 
 impl MemoryManagerAdapter {
-    fn new(_manager: Arc<MemoryManager>) -> Self {
-        let backend = HybridMemoryBackend::new(MemoryManager::default());
+    fn new(manager: Arc<MemoryManager>) -> Self {
         Self {
-            backend: Arc::new(backend),
+            manager: Arc::new(Mutex::new((*manager).clone())),
         }
     }
 }
@@ -38,25 +37,32 @@ impl MemoryManagerAdapter {
 #[async_trait]
 impl MemoryBackend for MemoryManagerAdapter {
     async fn store(&self, memory: openclaw_memory::types::MemoryItem) -> openclaw_core::Result<()> {
-        self.backend.store(memory).await
+        let content = memory.content.to_text();
+        let msg = openclaw_core::Message::user(content);
+        let mut manager = self.manager.lock().await;
+        manager.add(msg).await
     }
 
     async fn recall(&self, query: &str) -> openclaw_core::Result<openclaw_memory::recall::RecallResult> {
-        self.backend.recall(query).await
+        let manager = self.manager.lock().await;
+        manager.recall(query).await
     }
 
     async fn add(&self, message: openclaw_core::Message) -> openclaw_core::Result<()> {
-        self.backend.add(message).await
+        let mut manager = self.manager.lock().await;
+        manager.add(message).await
     }
 
     async fn retrieve(&self, query: &str, limit: usize) -> openclaw_core::Result<openclaw_memory::types::MemoryRetrieval> {
-        self.backend.retrieve(query, limit).await
+        let manager = self.manager.lock().await;
+        manager.retrieve(query, limit).await
     }
 }
 
 use crate::agentic_rag::AgenticRAGEngine;
 use crate::channel_message_handler::{self, create_channel_handler, OrchestratorMessageProcessor};
-use crate::ports::{AiPortAdapter, DevicePortAdapter, MemoryPortAdapter, SecurityPortAdapter, ToolPortAdapter};
+use crate::adapters::ToolRegistryAdapter;
+use crate::ports::{AiPortAdapter, DevicePortAdapter, MemoryPortAdapter, SecurityPortAdapter};
 
 #[cfg(feature = "per_session_memory")]
 const DEFAULT_MAX_SESSION_MEMORIES: usize = 100;
@@ -129,7 +135,7 @@ pub struct ServiceOrchestrator {
     ai_provider: Arc<RwLock<Option<Arc<dyn AIProvider>>>>,
     memory_manager: Arc<RwLock<Option<Arc<MemoryManager>>>>,
     security_pipeline: Arc<RwLock<Option<Arc<SecurityPipeline>>>>,
-    tool_executor: Arc<RwLock<Option<Arc<openclaw_tools::SkillRegistry>>>>,
+    tool_executor: Arc<RwLock<Option<Arc<openclaw_tools::ToolRegistry>>>>,
     channel_factory: Arc<openclaw_channels::ChannelFactoryRegistry>,
     agentic_rag_engine: Arc<RwLock<Option<Arc<AgenticRAGEngine>>>>,
     device_manager: Arc<RwLock<Option<Arc<openclaw_device::UnifiedDeviceManager>>>>,
@@ -394,9 +400,8 @@ impl ServiceOrchestrator {
                         as Arc<dyn openclaw_agent::ports::SecurityPort>;
 
                     let tool_port = tools.as_ref().map(|t| {
-                        Arc::new(ToolPortAdapter {
-                            registry: t.clone(),
-                        }) as Arc<dyn openclaw_agent::ports::ToolPort>
+                        Arc::new(ToolRegistryAdapter::new(t.clone()))
+                            as Arc<dyn openclaw_agent::ports::ToolPort>
                     });
 
                     agent_to_inject
@@ -428,6 +433,10 @@ impl ServiceOrchestrator {
             *pipeline = Some(security_pipeline.clone());
         }
         {
+            let mut executor = self.tool_executor.write().await;
+            *executor = tool_registry.clone();
+        }
+        {
             let mut device = self.device_manager.write().await;
             *device = device_manager.clone();
         }
@@ -439,6 +448,7 @@ impl ServiceOrchestrator {
 
         let mem_lock = memory_manager.clone();
         let device_lock = device_manager.clone();
+        let tool_lock = tool_registry.clone();
         for agent in agents {
             let ai_port = Arc::new(AiPortAdapter {
                 provider: ai_provider.clone(),
@@ -453,6 +463,12 @@ impl ServiceOrchestrator {
                 pipeline: security_pipeline.clone(),
             }) as Arc<dyn openclaw_agent::ports::SecurityPort>;
 
+            let tool_port: Option<Arc<dyn openclaw_agent::ports::ToolPort>> =
+                tool_lock.clone().map(|t| {
+                    Arc::new(ToolRegistryAdapter::new(t.clone()))
+                        as Arc<dyn openclaw_agent::ports::ToolPort>
+                });
+
             let device_port: Option<Arc<dyn openclaw_agent::ports::DevicePort>> =
                 device_lock.clone().map(|d| {
                     Arc::new(DevicePortAdapter::new(d))
@@ -460,7 +476,7 @@ impl ServiceOrchestrator {
                 });
 
             agent
-                .inject_ports(Some(ai_port), memory_port, Some(security_port), None, device_port)
+                .inject_ports(Some(ai_port), memory_port, Some(security_port), tool_port, device_port)
                 .await;
         }
 
@@ -647,27 +663,32 @@ impl ServiceOrchestrator {
                 if let Some(ref sid) = session_id {
                     if let Ok(uuid) = uuid::Uuid::parse_str(sid) {
                         if let Some(session_memory) = self.get_session_memory(&uuid).await {
-                            let ai_port = Arc::new(AiPortAdapter {
-                                provider: self.ai_provider.read().await.clone().unwrap(),
-                            })
-                                as Arc<dyn openclaw_agent::ports::AIPort>;
-                            let memory_port =
-                                Arc::new(MemoryPortAdapter::new(session_memory))
-                                    as Arc<dyn openclaw_agent::ports::MemoryPort>;
-                            let security_port = Arc::new(SecurityPipelineAdapter {
-                                pipeline: self.security_pipeline.read().await.clone().unwrap(),
-                            })
-                                as Arc<dyn openclaw_agent::ports::SecurityPort>;
+                            let ai_provider = self.ai_provider.read().await;
+                            let security_pipeline = self.security_pipeline.read().await;
+                            
+                            if let (Some(provider), Some(pipeline)) = (ai_provider.as_ref(), security_pipeline.as_ref()) {
+                                let ai_port = Arc::new(AiPortAdapter {
+                                    provider: Arc::new(provider.clone()),
+                                })
+                                    as Arc<dyn openclaw_agent::ports::AIPort>;
+                                let memory_port =
+                                    Arc::new(MemoryPortAdapter::new(session_memory))
+                                        as Arc<dyn openclaw_agent::ports::MemoryPort>;
+                                let security_port = Arc::new(SecurityPipelineAdapter {
+                                    pipeline: Arc::new(pipeline.clone()),
+                                })
+                                    as Arc<dyn openclaw_agent::ports::SecurityPort>;
 
-                            agent
-                                .inject_ports(
-                                    Some(ai_port),
-                                    Some(memory_port),
-                                    Some(security_port),
-                                    None,
-                                    None,
-                                )
-                                .await;
+                                agent
+                                    .inject_ports(
+                                        Some(ai_port),
+                                        Some(memory_port),
+                                        Some(security_port),
+                                        None,
+                                        None,
+                                    )
+                                    .await;
+                            }
                         }
                     }
                 }

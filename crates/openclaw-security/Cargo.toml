@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-openclaw-core = { path = "../openclaw-core" }
+openclaw-core.workspace = true
 
 async-trait = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
