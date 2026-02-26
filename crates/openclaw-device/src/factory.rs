@@ -45,7 +45,13 @@ static FACTORY_REGISTRY: std::sync::Mutex<Vec<Arc<dyn DeviceManagerFactory>>> =
     std::sync::Mutex::new(Vec::new());
 
 pub fn register_factory(factory: Arc<dyn DeviceManagerFactory>) {
-    FACTORY_REGISTRY.lock().unwrap().push(factory);
+    if let Ok(mut registry) = FACTORY_REGISTRY.lock() {
+        if registry.iter().any(|f| f.name() == factory.name()) {
+            tracing::debug!("Factory '{}' already registered, skipping", factory.name());
+            return;
+        }
+        registry.push(factory);
+    }
 }
 
 pub fn get_factory(name: &str) -> Option<Arc<dyn DeviceManagerFactory>> {

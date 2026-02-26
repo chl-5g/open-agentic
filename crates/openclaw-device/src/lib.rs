@@ -58,6 +58,18 @@ static DEVICE_REGISTRY: std::sync::OnceLock<Arc<registry::DeviceRegistry>> =
     std::sync::OnceLock::new();
 
 pub async fn init_device(print_info: bool) -> anyhow::Result<()> {
+    if let Some(registry) = DEVICE_REGISTRY.get() {
+        if print_info {
+            let info = registry.platform_info();
+            let caps = registry.capabilities();
+            println!("Device already initialized");
+            println!("Platform: {:?} ({})", info.platform, info.os);
+            println!("CPU Cores: {}", caps.cpu.cores);
+            println!("Memory: {:.1} GB", caps.memory.total_bytes as f64 / 1e9);
+        }
+        return Ok(());
+    }
+
     let registry = Arc::new(registry::DeviceRegistry::new());
     registry.init().await?;
 
