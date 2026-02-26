@@ -239,13 +239,6 @@ impl ServiceOrchestrator {
 
         let channel_factory = Arc::new(openclaw_channels::ChannelFactoryRegistry::new());
 
-        if config.enable_channels {
-            let factory_clone = channel_factory.clone();
-            tokio::spawn(async move {
-                register_default_channels(&factory_clone).await;
-            });
-        }
-
         let channel_manager = if config.enable_channels {
             openclaw_channels::ChannelManager::with_factory(channel_factory.clone())
         } else {
@@ -284,6 +277,8 @@ impl ServiceOrchestrator {
         }
 
         if self.config.enable_channels {
+            register_default_channels(&self.channel_service.factory).await;
+
             let handler = create_channel_handler(Arc::new(OrchestratorMessageProcessor {
                 orchestrator: Arc::new(self.clone()),
             }));
