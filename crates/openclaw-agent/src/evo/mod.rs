@@ -367,6 +367,10 @@ impl Default for SkillSandbox {
 
 pub mod registry;
 pub mod adapter;
+pub mod skill_loader;
+pub mod skill_tool_adapter;
+pub mod propagation;
+pub mod unified_skill_service;
 
 #[cfg(test)]
 mod tests {
