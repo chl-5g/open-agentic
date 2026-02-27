@@ -15,6 +15,10 @@
 | 🌐 **多平台消息** | 15+ 消息通道集成 (Telegram、Discord、钉钉、企业微信、飞书等) |
 | 🔐 **安全沙箱** | Docker/WASM 双轨隔离，输入过滤/输出验证/审计日志/自我修复 |
 | 🛠️ **工具生态** | 浏览器控制、定时任务、Cron 调度、Webhook、设备节点、MCP 集成 |
+| 📝 **Prompt-Driven 技能** | 通过编写 SKILL.md 扩展 Agent 能力，技能自动注入 System Prompt |
+| 🚪 **智能技能准入** | 环境检测 (bins/env/files)，技能根据系统环境自动启用/禁用 |
+| 🔄 **跨格式兼容** | 支持 GoClaw、OpenClaw、AgentSkills 三种技能格式 |
+| 🧬 **Evo 技能进化** | LLM 自动生成新技能，ACP 广播跨 Agent 传播 |
 
 ## 🏗️ 架构设计
 
@@ -35,7 +39,7 @@ openclaw-rust/
 │   ├── openclaw-memory    # 三层记忆系统 (工作/短期/长期)
 │   ├── openclaw-vector    # 向量存储抽象 (Qdrant/Milvus/Chroma...)
 │   ├── openclaw-channels  # 消息通道集成框架
-│   ├── openclaw-agent     # 多智能体系统 + Provider 抽象
+│   ├── openclaw-agent     # 多智能体系统 + Provider 抽象 + Evo 技能进化引擎
 │   ├── openclaw-voice     # STT/TTS 语音服务
 │   ├── openclaw-server    # HTTP/WebSocket Gateway 服务
 │   ├── openclaw-canvas    # 实时协作画布
@@ -103,7 +107,27 @@ Matrix (去中心化) | WebChat (自定义 Webhook) | Email | SMS
 ### 扩展集成
 
 - **MCP**: Model Context Protocol 客户端 (Stdio/HTTP/SSE)
-- **技能系统**: ClawHub/内置/托管/工作区技能
+- **技能系统**: ClawHub/内置/托管/工作区技能 (GoClaw/OpenClaw/AgentSkills 兼容)
+
+### 技能进化 (Evo)
+
+- **Prompt-Driven 技能**: 用户编写 SKILL.md 扩展 Agent 能力
+- **自动准入检测**: 环境检测 (bins/env/files)，技能自动启用/禁用
+- **LLM 进化生成**: LLM 自动分析任务模式，生成新技能
+- **跨 Agent 传播**: 通过 ACP 广播分发技能到整个 Agent 网络
+
+```bash
+# 使用 agent 命令
+openclaw-rust agent --message "帮我写个排序算法"
+
+# 技能文件示例 (SKILL.md)
+# Skill: code_generator
+# Type: prompt
+# Instructions: 当用户请求编写代码时，使用 exec 执行...
+# Gating
+#   requires:
+#     bins: [python3, node]
+```
 
 ## 🚀 快速开始
 
@@ -134,6 +158,7 @@ cargo run -- doctor
 | `wizard` | 交互式设置向导 |
 | `doctor` | 系统健康检查与修复 |
 | `gateway` | 启动 HTTP/WebSocket 服务 |
+| `agent` | 启动 Agent 对话模式 |
 | `daemon start` | 启动后台守护进程 |
 | `daemon install` | 安装为系统服务 |
 
