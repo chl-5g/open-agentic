@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 openclaw-core.workspace = true
 openclaw-ai.workspace = true
+openclaw-agent.workspace = true
 openclaw-memory.workspace = true
 openclaw-vector.workspace = true
 openclaw-channels.workspace = true

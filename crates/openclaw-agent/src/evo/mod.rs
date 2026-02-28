@@ -517,6 +517,11 @@ pub mod skill_tool_adapter;
 pub mod propagation;
 pub mod unified_skill_service;
 pub mod skill_prompt_injector;
+pub mod pattern_analyzer;
+pub mod learning_history;
+pub mod knowledge_graph;
+pub mod skill_validator;
+pub mod evo_v2_engine;
 
 #[cfg(test)]
 mod tests {

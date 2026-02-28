@@ -13,6 +13,8 @@ mod channel_cmd;
 mod commands;
 mod daemon_cmd;
 mod doctor_cmd;
+mod evo_cmd;
+mod evo_runner;
 mod message_cmd;
 mod onboard;
 mod skill_cmd;
@@ -78,6 +80,11 @@ enum Commands {
     Skill {
         #[command(subcommand)]
         command: skill_cmd::SkillCommand,
+    },
+    /// Evo self-evolution system commands
+    Evo {
+        #[command(subcommand)]
+        command: evo_cmd::EvoCommand,
     },
     /// Initialize configuration
     Init {
@@ -197,6 +204,9 @@ async fn main() -> Result<()> {
         }
         Commands::Skill { command } => {
             skill_cmd::execute(command).await?;
+        }
+        Commands::Evo { command } => {
+            evo_cmd::execute(command).await?;
         }
         Commands::Init { config } => {
             commands::init::run(&config).await?;
