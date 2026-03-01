@@ -5881,6 +5881,7 @@ dependencies = [
  "dialoguer",
  "dirs 6.0.0",
  "lazy_static",
+ "openclaw-agent",
  "openclaw-ai",
  "openclaw-channels",
  "openclaw-core",

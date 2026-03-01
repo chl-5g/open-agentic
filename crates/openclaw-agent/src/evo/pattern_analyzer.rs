@@ -3,6 +3,7 @@
 //! 从任务执行中提取可复用的模式，用于技能进化学习
 
 use chrono::{DateTime, Utc};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -74,9 +75,64 @@ pub struct ExecutionStep {
     pub success: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRecord {
+    pub task_id: String,
+    pub task_type: String,
+    pub input: String,
+    pub tool_calls: Vec<ToolCall>,
+    pub success: bool,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatternMatch {
+    pub pattern_id: String,
+    pub similarity: f64,
+    pub match_type: MatchType,
+    pub differences: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MatchType {
+    Exact,
+    Partial,
+    Potential,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatternCluster {
+    pub id: String,
+    pub patterns: Vec<String>,
+    pub frequency: u32,
+    pub avg_reusability: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationReport {
+    pub is_valid: bool,
+    pub score: f64,
+    pub issues: Vec<ValidationIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationIssue {
+    pub rule: String,
+    pub severity: IssueSeverity,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum IssueSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
 #[derive(Debug, Clone)]
 pub struct PatternAnalyzer {
     config: AnalyzerConfig,
+    generalization_patterns: Vec<(Regex, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,11 +162,26 @@ impl PatternAnalyzer {
     pub fn new() -> Self {
         Self {
             config: AnalyzerConfig::default(),
+            generalization_patterns: Self::init_generalization_patterns(),
         }
     }
 
     pub fn with_config(config: AnalyzerConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            generalization_patterns: Self::init_generalization_patterns(),
+        }
+    }
+
+    fn init_generalization_patterns() -> Vec<(Regex, String)> {
+        vec![
+            (Regex::new(r"^/.*").unwrap(), "<PATH>".to_string()),
+            (Regex::new(r"^[A-Za-z]:\\.*").unwrap(), "<PATH>".to_string()),
+            (Regex::new(r"https?://[^\s]+").unwrap(), "<URL>".to_string()),
+            (Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap(), "<EMAIL>".to_string()),
+            (Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").unwrap(), "<UUID>".to_string()),
+            (Regex::new(r"\b\d+\b").unwrap(), "<NUMBER>".to_string()),
+        ]
     }
 
     pub fn extract(
@@ -136,6 +207,253 @@ impl PatternAnalyzer {
             reusability_score,
             source_task_id: task_id.to_string(),
             created_at: Utc::now(),
+        }
+    }
+
+    pub fn from_task_record(&self, record: &TaskRecord) -> TaskPattern {
+        self.extract(
+            &record.task_id,
+            &record.input,
+            &record.tool_calls,
+        )
+    }
+
+    pub fn extract_and_generalize(
+        &self,
+        task_id: &str,
+        task_input: &str,
+        tool_calls: &[ToolCall],
+    ) -> TaskPattern {
+        let mut pattern = self.extract(task_id, task_input, tool_calls);
+        pattern.param_patterns = self.generalize_params(&pattern.param_patterns);
+        pattern.reusability_score = self.score_reusability(
+            &pattern.task_category,
+            &pattern.param_patterns,
+            &pattern.steps,
+        );
+        pattern
+    }
+
+    fn generalize_params(&self, params: &[ParamPattern]) -> Vec<ParamPattern> {
+        params
+            .iter()
+            .map(|p| {
+                let generalized_examples: Vec<String> = p
+                    .examples
+                    .iter()
+                    .map(|e| self.generalize_value(e))
+                    .collect();
+
+                let is_generic = p.is_generic
+                    || generalized_examples.iter().any(|e| e.starts_with('<'));
+
+                ParamPattern {
+                    name: p.name.clone(),
+                    param_type: p.param_type.clone(),
+                    is_generic,
+                    examples: generalized_examples,
+                }
+            })
+            .collect()
+    }
+
+    fn generalize_value(&self, value: &str) -> String {
+        let mut result = value.to_string();
+        
+        if result.starts_with('/') || (result.len() > 1 && result.chars().nth(1) == Some(':')) {
+            return "<PATH>".to_string();
+        }
+        
+        for (pattern, replacement) in &self.generalization_patterns {
+            if pattern.is_match(&result) {
+                result = pattern.replace_all(&result, replacement.as_str()).to_string();
+            }
+        }
+        result
+    }
+
+    pub fn find_matching_patterns(
+        &self,
+        new_pattern: &TaskPattern,
+        existing: &[TaskPattern],
+    ) -> Vec<PatternMatch> {
+        let mut matches = Vec::new();
+
+        for existing_pattern in existing {
+            let similarity = self.calculate_similarity(new_pattern, existing_pattern);
+            
+            if similarity > 0.3 {
+                let match_type = if similarity >= 0.8 {
+                    MatchType::Exact
+                } else if similarity >= 0.5 {
+                    MatchType::Partial
+                } else {
+                    MatchType::Potential
+                };
+
+                let differences = self.find_differences(new_pattern, existing_pattern);
+
+                matches.push(PatternMatch {
+                    pattern_id: existing_pattern.id.clone(),
+                    similarity,
+                    match_type,
+                    differences,
+                });
+            }
+        }
+
+        matches.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
+        matches
+    }
+
+    fn calculate_similarity(&self, a: &TaskPattern, b: &TaskPattern) -> f64 {
+        let tool_similarity = self.tool_sequence_similarity(&a.tool_sequence, &b.tool_sequence);
+        let param_similarity = self.param_similarity(&a.param_patterns, &b.param_patterns);
+        let category_similarity = if a.task_category == b.task_category { 1.0 } else { 0.0 };
+
+        tool_similarity * 0.5 + param_similarity * 0.3 + category_similarity * 0.2
+    }
+
+    fn tool_sequence_similarity(&self, a: &[ToolCallPattern], b: &[ToolCallPattern]) -> f64 {
+        if a.is_empty() || b.is_empty() {
+            return 0.0;
+        }
+
+        let lcs_length = self.lcs_length(
+            &a.iter().map(|p| p.tool_name.clone()).collect::<Vec<_>>(),
+            &b.iter().map(|p| p.tool_name.clone()).collect::<Vec<_>>(),
+        );
+
+        let max_len = a.len().max(b.len());
+        lcs_length as f64 / max_len as f64
+    }
+
+    fn lcs_length(&self, a: &[String], b: &[String]) -> usize {
+        let m = a.len();
+        let n = b.len();
+        let mut dp = vec![vec![0; n + 1]; m + 1];
+
+        for i in 1..=m {
+            for j in 1..=n {
+                if a[i - 1] == b[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
+                }
+            }
+        }
+
+        dp[m][n]
+    }
+
+    fn param_similarity(&self, a: &[ParamPattern], b: &[ParamPattern]) -> f64 {
+        if a.is_empty() && b.is_empty() {
+            return 1.0;
+        }
+        if a.is_empty() || b.is_empty() {
+            return 0.0;
+        }
+
+        let a_types: Vec<_> = a.iter().map(|p| &p.param_type).collect();
+        let b_types: Vec<_> = b.iter().map(|p| &p.param_type).collect();
+
+        let matches = a_types
+            .iter()
+            .filter(|t| b_types.contains(t))
+            .count();
+
+        let max_len = a_types.len().max(b_types.len());
+        matches as f64 / max_len as f64
+    }
+
+    fn find_differences(&self, a: &TaskPattern, b: &TaskPattern) -> Vec<String> {
+        let mut differences = Vec::new();
+
+        if a.task_category != b.task_category {
+            differences.push(format!(
+                "Category: '{}' vs '{}'",
+                a.task_category, b.task_category
+            ));
+        }
+
+        let a_tools: Vec<_> = a.tool_sequence.iter().map(|p| &p.tool_name).collect();
+        let b_tools: Vec<_> = b.tool_sequence.iter().map(|p| &p.tool_name).collect();
+
+        for tool in a_tools.iter() {
+            if !b_tools.contains(tool) {
+                differences.push(format!("Extra tool: {}", tool));
+            }
+        }
+
+        for tool in b_tools.iter() {
+            if !a_tools.contains(tool) {
+                differences.push(format!("Missing tool: {}", tool));
+            }
+        }
+
+        differences
+    }
+
+    pub fn validate(&self, pattern: &TaskPattern) -> ValidationReport {
+        let mut issues = Vec::new();
+        let mut score: f64 = 1.0;
+
+        if pattern.tool_sequence.len() < 2 {
+            issues.push(ValidationIssue {
+                rule: "min_tool_count".to_string(),
+                severity: IssueSeverity::Error,
+                message: "Pattern must have at least 2 tool calls".to_string(),
+            });
+            score -= 0.4;
+        }
+
+        let success_ratio = if !pattern.steps.is_empty() {
+            pattern.steps.iter().filter(|s| s.success).count() as f64 / pattern.steps.len() as f64
+        } else {
+            0.0
+        };
+
+        if success_ratio < 0.8 {
+            issues.push(ValidationIssue {
+                rule: "success_rate".to_string(),
+                severity: IssueSeverity::Warning,
+                message: format!("Success rate {:.0}% is below 80%", success_ratio * 100.0),
+            });
+            score -= 0.2;
+        }
+
+        let generic_ratio = if !pattern.param_patterns.is_empty() {
+            pattern.param_patterns.iter().filter(|p| p.is_generic).count() as f64
+                / pattern.param_patterns.len() as f64
+        } else {
+            0.0
+        };
+
+        if generic_ratio < 0.3 {
+            issues.push(ValidationIssue {
+                rule: "generic_params".to_string(),
+                severity: IssueSeverity::Warning,
+                message: "Too few generic parameters for reusability".to_string(),
+            });
+            score -= 0.1;
+        }
+
+        if pattern.reusability_score < self.config.min_reusability_threshold {
+            issues.push(ValidationIssue {
+                rule: "reusability_score".to_string(),
+                severity: IssueSeverity::Warning,
+                message: format!(
+                    "Reusability score {:.2} below threshold {:.2}",
+                    pattern.reusability_score, self.config.min_reusability_threshold
+                ),
+            });
+            score -= 0.3;
+        }
+
+        ValidationReport {
+            is_valid: issues.iter().all(|i| i.severity != IssueSeverity::Error),
+            score: score.max(0.0_f64).min(1.0_f64),
+            issues,
         }
     }
 
@@ -196,21 +514,25 @@ impl PatternAnalyzer {
         schema
     }
 
-    fn extract_param_patterns(&self, input: &str, tool_calls: &[ToolCall]) -> Vec<ParamPattern> {
-        let mut patterns = Vec::new();
+    fn extract_param_patterns(&self, _input: &str, tool_calls: &[ToolCall]) -> Vec<ParamPattern> {
+        let mut patterns = Vec::<ParamPattern>::new();
         
-        // Extract patterns from tool call arguments
         for call in tool_calls {
             if let serde_json::Value::Object(args) = &call.arguments {
                 for (name, value) in args {
                     let param_type = ParamType::from_json_value(value);
-                    let is_generic = self.is_generic_param(name, value);
                     let example = value.to_string();
+                    let generalized = self.generalize_value(&example);
+                    let is_generic = self.is_generic_param(name, value) || generalized.starts_with('<');
                     
-                    // Check if we already have this pattern
-                    if let Some(existing) = patterns.iter_mut().find(|p: &&mut ParamPattern| p.name == *name) {
-                        if !existing.examples.contains(&example) {
-                            existing.examples.push(example);
+                    let existing_idx = patterns.iter().position(|p| p.name == *name);
+                    
+                    if let Some(idx) = existing_idx {
+                        if !patterns[idx].examples.contains(&example) {
+                            patterns[idx].examples.push(example);
+                        }
+                        if generalized.starts_with('<') {
+                            patterns[idx].is_generic = true;
                         }
                     } else {
                         patterns.push(ParamPattern {
@@ -237,6 +559,9 @@ impl PatternAnalyzer {
         
         if let serde_json::Value::String(s) = value {
             if s.is_empty() || s.starts_with('<') || s.starts_with('{') {
+                return true;
+            }
+            if s.starts_with('/') || (s.len() > 1 && s.chars().nth(1) == Some(':')) {
                 return true;
             }
         }
@@ -312,7 +637,6 @@ impl PatternAnalyzer {
     ) -> f64 {
         let mut score = 0.0;
         
-        // Category factor - some categories are more reusable
         let category_weight = match category {
             "file_operation" => 0.8,
             "api_call" => 0.9,
@@ -322,7 +646,6 @@ impl PatternAnalyzer {
         };
         score += category_weight * 0.4;
         
-        // Generic parameters factor
         let generic_ratio = if !param_patterns.is_empty() {
             param_patterns.iter().filter(|p| p.is_generic).count() as f64 / param_patterns.len() as f64
         } else {
@@ -330,7 +653,6 @@ impl PatternAnalyzer {
         };
         score += generic_ratio * 0.3;
         
-        // Success rate factor
         let success_ratio = if !steps.is_empty() {
             steps.iter().filter(|s| s.success).count() as f64 / steps.len() as f64
         } else {
@@ -338,8 +660,7 @@ impl PatternAnalyzer {
         };
         score += success_ratio * 0.3;
         
-        // Apply threshold
-        score.max(0.0).min(1.0)
+        score.max(0.0_f64).min(1.0_f64)
     }
 
     pub fn is_repeatable(&self, pattern: &TaskPattern) -> bool {
@@ -531,7 +852,6 @@ mod tests {
     fn test_score_reusability() {
         let analyzer = PatternAnalyzer::new();
         
-        // High reusability: API call with generic params
         let param_patterns = vec![
             ParamPattern {
                 name: "query".to_string(),
@@ -553,7 +873,6 @@ mod tests {
         let score = analyzer.score_reusability("api_call", &param_patterns, &steps);
         assert!(score > 0.6);
         
-        // Low reusability: general task with specific params
         let score = analyzer.score_reusability("general", &[], &[]);
         assert!(score < 0.6);
     }
@@ -653,7 +972,6 @@ mod tests {
         
         let analyzer = PatternAnalyzer::with_config(config.clone());
         
-        // Test that custom config is used
         let tool_calls = vec![ToolCall {
             name: "test".to_string(),
             arguments: serde_json::json!({}),
@@ -663,5 +981,334 @@ mod tests {
         
         let pattern = analyzer.extract("task-1", "test task", &tool_calls);
         assert!(pattern.reusability_score < 0.7 || pattern.reusability_score >= 0.0);
+    }
+
+    #[test]
+    fn test_from_task_record() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let record = TaskRecord {
+            task_id: "task-123".to_string(),
+            task_type: "file_operation".to_string(),
+            input: "Read file /home/user/data.txt".to_string(),
+            tool_calls: vec![
+                ToolCall {
+                    name: "read_file".to_string(),
+                    arguments: serde_json::json!({"path": "/home/user/data.txt"}),
+                    result: Some(serde_json::json!("file content")),
+                    duration_ms: 50,
+                },
+            ],
+            success: true,
+            duration_ms: 100,
+        };
+        
+        let pattern = analyzer.from_task_record(&record);
+        
+        assert_eq!(pattern.source_task_id, "task-123");
+        assert_eq!(pattern.task_category, "file_operation");
+    }
+
+    #[test]
+    fn test_generalize_value_path() {
+        let analyzer = PatternAnalyzer::new();
+        
+        assert_eq!(analyzer.generalize_value("/home/user/document.pdf"), "<PATH>");
+        assert_eq!(analyzer.generalize_value("C:\\Users\\admin\\file.txt"), "<PATH>");
+        
+        let params = vec![ParamPattern {
+            name: "path".to_string(),
+            param_type: ParamType::String,
+            is_generic: false,
+            examples: vec!["/home/user/data.json".to_string()],
+        }];
+        
+        let generalized = analyzer.generalize_params(&params);
+        assert!(generalized[0].is_generic, "is_generic should be true after generalization, got: {:?}", generalized);
+    }
+
+    #[test]
+    fn test_generalize_value_url() {
+        let analyzer = PatternAnalyzer::new();
+        
+        assert_eq!(
+            analyzer.generalize_value("https://api.example.com/v1/users"),
+            "<URL>"
+        );
+        assert_eq!(
+            analyzer.generalize_value("http://localhost:8080/api"),
+            "<URL>"
+        );
+    }
+
+    #[test]
+    fn test_generalize_value_email() {
+        let analyzer = PatternAnalyzer::new();
+        
+        assert_eq!(
+            analyzer.generalize_value("user@example.com"),
+            "<EMAIL>"
+        );
+    }
+
+    #[test]
+    fn test_generalize_value_uuid() {
+        let analyzer = PatternAnalyzer::new();
+        
+        assert_eq!(
+            analyzer.generalize_value("550e8400-e29b-41d4-a716-446655440000"),
+            "<UUID>"
+        );
+    }
+
+    #[test]
+    fn test_generalize_value_number() {
+        let analyzer = PatternAnalyzer::new();
+        
+        assert_eq!(analyzer.generalize_value("page=42"), "page=<NUMBER>");
+    }
+
+    #[test]
+    fn test_extract_and_generalize() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let tool_calls = vec![
+            ToolCall {
+                name: "read_file".to_string(),
+                arguments: serde_json::json!({"path": "/home/user/data.json"}),
+                result: Some(serde_json::json!("content")),
+                duration_ms: 50,
+            },
+        ];
+        
+        let pattern = analyzer.extract_and_generalize("task-1", "Read file", &tool_calls);
+        
+        assert_eq!(pattern.param_patterns.len(), 1);
+        assert!(pattern.param_patterns[0].is_generic);
+    }
+
+    #[test]
+    fn test_lcs_length() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let b = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        assert_eq!(analyzer.lcs_length(&a, &b), 3);
+        
+        let a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let b = vec!["a".to_string(), "c".to_string(), "e".to_string()];
+        assert_eq!(analyzer.lcs_length(&a, &b), 2);
+        
+        let a = vec!["a".to_string(), "b".to_string()];
+        let b = vec!["c".to_string(), "d".to_string()];
+        assert_eq!(analyzer.lcs_length(&a, &b), 0);
+    }
+
+    #[test]
+    fn test_tool_sequence_similarity() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let a = vec![
+            ToolCallPattern {
+                tool_name: "search".to_string(),
+                param_schema: HashMap::new(),
+                result_schema: HashMap::new(),
+            },
+            ToolCallPattern {
+                tool_name: "fetch".to_string(),
+                param_schema: HashMap::new(),
+                result_schema: HashMap::new(),
+            },
+        ];
+        let b = vec![
+            ToolCallPattern {
+                tool_name: "search".to_string(),
+                param_schema: HashMap::new(),
+                result_schema: HashMap::new(),
+            },
+            ToolCallPattern {
+                tool_name: "fetch".to_string(),
+                param_schema: HashMap::new(),
+                result_schema: HashMap::new(),
+            },
+        ];
+        
+        let similarity = analyzer.tool_sequence_similarity(&a, &b);
+        assert_eq!(similarity, 1.0);
+        
+        let b_partial = vec![
+            ToolCallPattern {
+                tool_name: "search".to_string(),
+                param_schema: HashMap::new(),
+                result_schema: HashMap::new(),
+            },
+        ];
+        
+        let similarity = analyzer.tool_sequence_similarity(&a, &b_partial);
+        assert!(similarity > 0.3 && similarity < 1.0);
+    }
+
+    #[test]
+    fn test_find_matching_patterns() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let new_pattern = TaskPattern {
+            id: "new-1".to_string(),
+            task_category: "search".to_string(),
+            tool_sequence: vec![
+                ToolCallPattern {
+                    tool_name: "search".to_string(),
+                    param_schema: HashMap::new(),
+                    result_schema: HashMap::new(),
+                },
+                ToolCallPattern {
+                    tool_name: "fetch".to_string(),
+                    param_schema: HashMap::new(),
+                    result_schema: HashMap::new(),
+                },
+            ],
+            param_patterns: vec![],
+            success_indicators: vec![],
+            steps: vec![],
+            reusability_score: 0.7,
+            source_task_id: "task-1".to_string(),
+            created_at: Utc::now(),
+        };
+        
+        let existing = vec![
+            TaskPattern {
+                id: "existing-1".to_string(),
+                task_category: "search".to_string(),
+                tool_sequence: vec![
+                    ToolCallPattern {
+                        tool_name: "search".to_string(),
+                        param_schema: HashMap::new(),
+                        result_schema: HashMap::new(),
+                    },
+                    ToolCallPattern {
+                        tool_name: "fetch".to_string(),
+                        param_schema: HashMap::new(),
+                        result_schema: HashMap::new(),
+                    },
+                ],
+                param_patterns: vec![],
+                success_indicators: vec![],
+                steps: vec![],
+                reusability_score: 0.8,
+                source_task_id: "task-2".to_string(),
+                created_at: Utc::now(),
+            },
+        ];
+        
+        let matches = analyzer.find_matching_patterns(&new_pattern, &existing);
+        
+        assert_eq!(matches.len(), 1);
+        assert!(matches[0].similarity > 0.7);
+        assert_eq!(matches[0].match_type, MatchType::Exact);
+    }
+
+    #[test]
+    fn test_validate_pattern_valid() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let pattern = TaskPattern {
+            id: "1".to_string(),
+            task_category: "api_call".to_string(),
+            tool_sequence: vec![
+                ToolCallPattern {
+                    tool_name: "fetch".to_string(),
+                    param_schema: HashMap::new(),
+                    result_schema: HashMap::new(),
+                },
+                ToolCallPattern {
+                    tool_name: "parse".to_string(),
+                    param_schema: HashMap::new(),
+                    result_schema: HashMap::new(),
+                },
+            ],
+            param_patterns: vec![
+                ParamPattern {
+                    name: "query".to_string(),
+                    param_type: ParamType::String,
+                    is_generic: true,
+                    examples: vec![],
+                },
+            ],
+            success_indicators: vec!["fetch_success".to_string()],
+            steps: vec![
+                ExecutionStep {
+                    step_number: 1,
+                    tool_name: "fetch".to_string(),
+                    input_summary: "test".to_string(),
+                    output_summary: "result".to_string(),
+                    success: true,
+                },
+            ],
+            reusability_score: 0.8,
+            source_task_id: "task-1".to_string(),
+            created_at: Utc::now(),
+        };
+        
+        let report = analyzer.validate(&pattern);
+        
+        assert!(report.is_valid);
+        assert!(report.score > 0.5);
+    }
+
+    #[test]
+    fn test_validate_pattern_invalid_low_tool_count() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let pattern = TaskPattern {
+            id: "1".to_string(),
+            task_category: "general".to_string(),
+            tool_sequence: vec![],
+            param_patterns: vec![],
+            success_indicators: vec![],
+            steps: vec![],
+            reusability_score: 0.3,
+            source_task_id: "task-1".to_string(),
+            created_at: Utc::now(),
+        };
+        
+        let report = analyzer.validate(&pattern);
+        
+        assert!(!report.is_valid);
+        assert!(report.issues.iter().any(|i| i.rule == "min_tool_count"));
+    }
+
+    #[test]
+    fn test_validate_pattern_low_reusability() {
+        let analyzer = PatternAnalyzer::new();
+        
+        let pattern = TaskPattern {
+            id: "1".to_string(),
+            task_category: "general".to_string(),
+            tool_sequence: vec![
+                ToolCallPattern {
+                    tool_name: "test".to_string(),
+                    param_schema: HashMap::new(),
+                    result_schema: HashMap::new(),
+                },
+            ],
+            param_patterns: vec![],
+            success_indicators: vec![],
+            steps: vec![
+                ExecutionStep {
+                    step_number: 1,
+                    tool_name: "test".to_string(),
+                    input_summary: "test".to_string(),
+                    output_summary: "result".to_string(),
+                    success: true,
+                },
+            ],
+            reusability_score: 0.3,
+            source_task_id: "task-1".to_string(),
+            created_at: Utc::now(),
+        };
+        
+        let report = analyzer.validate(&pattern);
+        
+        assert!(report.issues.iter().any(|i| i.rule == "reusability_score"));
     }
 }

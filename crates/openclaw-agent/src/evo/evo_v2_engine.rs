@@ -161,7 +161,7 @@ impl EvoV2Engine {
         }
     }
 
-    async fn find_similar_skill(&self, pattern: &TaskPattern) -> Option<String> {
+    async fn find_similar_skill(&self, _pattern: &TaskPattern) -> Option<String> {
         let graph = self.knowledge_graph.read().await;
         let skills = self.learned_skills.read().await;
 
