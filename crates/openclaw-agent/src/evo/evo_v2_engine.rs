@@ -95,6 +95,7 @@ pub struct EvoV2Engine {
     schedule_manager: Arc<autonomous::ScheduleManager>,
     hand_registry: Arc<autonomous::HandRegistry>,
     hand_executor: Arc<autonomous::HandExecutor>,
+    hand_output_manager: Arc<autonomous::HandOutputManager>,
     metrics_collector: Arc<autonomous::MetricsCollector>,
 }
 
@@ -126,6 +127,7 @@ impl EvoV2Engine {
                 Arc::new(autonomous::MetricsCollector::new()),
             )),
             metrics_collector: Arc::new(autonomous::MetricsCollector::new()),
+            hand_output_manager: Arc::new(autonomous::HandOutputManager::new()),
         }
     }
 

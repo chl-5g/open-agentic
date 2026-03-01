@@ -1,6 +1,9 @@
 use chrono::Utc;
 
-use super::hand::{Guardrail, GuardrailAction, Hand, HandCategory, MetricDefinition, ToolDefinition};
+use super::hand::{
+    ExecutionConfig, Guardrail, GuardrailAction, Hand, HandCategory, HandOutputChannel,
+    HandState, MetricDefinition, OutputFormat, ToolDefinition,
+};
 use super::schedule::ScheduleType;
 
 pub fn get_preset_hands() -> Vec<Hand> {
@@ -62,6 +65,10 @@ Always cite your sources and provide evidence for claims."#.to_string(),
         enabled: false,
         created_at: now,
         updated_at: now,
+        version: "1.0.0".to_string(),
+        output_channels: vec![],
+        execution_config: ExecutionConfig::default(),
+        state: HandState::default(),
     }
 }
 
@@ -125,6 +132,10 @@ Be thorough and accurate in your intelligence gathering."#.to_string(),
         enabled: false,
         created_at: now,
         updated_at: now,
+        version: "1.0.0".to_string(),
+        output_channels: vec![],
+        execution_config: ExecutionConfig::default(),
+        state: HandState::default(),
     }
 }
 
@@ -196,6 +207,10 @@ Focus on quality leads that match the ICP criteria."#.to_string(),
         enabled: false,
         created_at: now,
         updated_at: now,
+        version: "1.0.0".to_string(),
+        output_channels: vec![],
+        execution_config: ExecutionConfig::default(),
+        state: HandState::default(),
     }
 }
 
@@ -259,6 +274,10 @@ Be honest about uncertainty and update your beliefs based on evidence."#.to_stri
         enabled: false,
         created_at: now,
         updated_at: now,
+        version: "1.0.0".to_string(),
+        output_channels: vec![],
+        execution_config: ExecutionConfig::default(),
+        state: HandState::default(),
     }
 }
 

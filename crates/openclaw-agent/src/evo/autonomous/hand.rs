@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use super::schedule::{Schedule, ScheduleType};
+pub use super::schedule::ScheduleType;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum HandCategory {
@@ -14,6 +14,86 @@ pub enum HandCategory {
     Social,
     Automation,
     Custom,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum OutputFormat {
+    #[default]
+    Markdown,
+    Json,
+    Text,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HandOutputChannel {
+    pub channel_type: String,
+    pub channel_id: String,
+    pub format: OutputFormat,
+    pub on_events: Vec<String>,
+}
+
+impl Default for HandOutputChannel {
+    fn default() -> Self {
+        Self {
+            channel_type: String::new(),
+            channel_id: String::new(),
+            format: OutputFormat::Markdown,
+            on_events: vec!["success".to_string()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutionConfig {
+    pub max_retries: u32,
+    pub timeout_secs: u64,
+    pub retry_delay_secs: u64,
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            timeout_secs: 300,
+            retry_delay_secs: 60,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HandStatus {
+    Active,
+    Paused,
+    Running,
+    Failed,
+    Disabled,
+}
+
+impl Default for HandStatus {
+    fn default() -> Self {
+        Self::Active
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HandState {
+    pub status: HandStatus,
+    pub last_execution: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_output: Option<String>,
+    pub execution_count: u64,
+    pub consecutive_failures: u32,
+}
+
+impl Default for HandState {
+    fn default() -> Self {
+        Self {
+            status: HandStatus::default(),
+            last_execution: None,
+            last_output: None,
+            execution_count: 0,
+            consecutive_failures: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +138,14 @@ pub struct Hand {
     pub enabled: bool,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub output_channels: Vec<HandOutputChannel>,
+    #[serde(default)]
+    pub execution_config: ExecutionConfig,
+    #[serde(default)]
+    pub state: HandState,
 }
 
 impl Hand {
@@ -77,6 +165,10 @@ impl Hand {
             enabled: false,
             created_at: now,
             updated_at: now,
+            version: "1.0.0".to_string(),
+            output_channels: Vec::new(),
+            execution_config: ExecutionConfig::default(),
+            state: HandState::default(),
         }
     }
 

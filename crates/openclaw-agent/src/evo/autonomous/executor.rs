@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
-use super::hand::{Hand, HandCategory, HandRegistry};
+use super::hand::{Hand, HandRegistry};
 use super::schedule::ScheduleManager;
 use super::metrics::MetricsCollector;
 
@@ -284,6 +284,26 @@ impl HandExecutor {
             false
         }
     }
+
+    pub async fn update_hand_state(&self, hand_id: &str, success: bool, output: Option<String>) {
+        if let Some(mut hand) = self.registry.get(hand_id).await {
+            hand.state.execution_count += 1;
+            hand.state.last_execution = Some(Utc::now());
+            hand.state.last_output = output;
+            
+            if success {
+                hand.state.consecutive_failures = 0;
+                hand.state.status = super::hand::HandStatus::Active;
+            } else {
+                hand.state.consecutive_failures += 1;
+                if hand.state.consecutive_failures >= hand.execution_config.max_retries {
+                    hand.state.status = super::hand::HandStatus::Failed;
+                }
+            }
+            
+            let _ = self.registry.update(hand).await;
+        }
+    }
 }
 
 struct HandOutput {
@@ -295,6 +315,7 @@ struct HandOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::hand::HandCategory;
 
     #[tokio::test]
     async fn test_execute_not_found() {
