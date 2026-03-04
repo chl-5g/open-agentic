@@ -1,11 +1,15 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
-use super::hand::{Hand, HandRegistry};
+use crate::task::{TaskInput, TaskRequest, TaskResult, TaskStatus, TaskType};
+use crate::agent::Agent;
+use crate::evo::registry::SharedSkillRegistry;
+use super::hand::{Hand, HandRegistry, SkillCall};
 use super::schedule::ScheduleManager;
 use super::metrics::MetricsCollector;
 
@@ -107,6 +111,10 @@ pub struct HandExecutor {
     metrics_collector: Arc<MetricsCollector>,
     approval_requests: Arc<RwLock<HashMap<String, ApprovalRequest>>>,
     execution_history: Arc<RwLock<HashMap<String, Vec<ExecutionResult>>>>,
+    agent: Option<Arc<dyn Agent>>,
+    skill_registry: Option<Arc<SharedSkillRegistry>>,
+    optimizer: Option<Arc<super::optimizer::HandOptimizer>>,
+    predictor: Option<Arc<super::predictor::PredictionEngine>>,
 }
 
 impl HandExecutor {
@@ -121,7 +129,35 @@ impl HandExecutor {
             metrics_collector,
             approval_requests: Arc::new(RwLock::new(HashMap::new())),
             execution_history: Arc::new(RwLock::new(HashMap::new())),
+            agent: None,
+            skill_registry: None,
+            optimizer: None,
+            predictor: None,
         }
+    }
+
+    pub fn with_agent(mut self, agent: Arc<dyn Agent>) -> Self {
+        self.agent = Some(agent);
+        self
+    }
+
+    pub fn has_agent(&self) -> bool {
+        self.agent.is_some()
+    }
+
+    pub fn with_skill_registry(mut self, registry: Arc<SharedSkillRegistry>) -> Self {
+        self.skill_registry = Some(registry);
+        self
+    }
+
+    pub fn with_optimizer(mut self, optimizer: Arc<super::optimizer::HandOptimizer>) -> Self {
+        self.optimizer = Some(optimizer);
+        self
+    }
+
+    pub fn with_predictor(mut self, predictor: Arc<super::predictor::PredictionEngine>) -> Self {
+        self.predictor = Some(predictor);
+        self
     }
 
     pub async fn execute(&self, hand_id: &str, ctx: ExecutionContext) -> ExecutionResult {
@@ -163,9 +199,11 @@ impl HandExecutor {
              timestamp: Utc::now(),
          };
          
-         let duration_ms = start_time.elapsed().as_millis() as u64;
+         let _duration_ms = start_time.elapsed().as_millis() as u64;
  
          self.metrics_collector.record(&execution_result).await;
+         
+         self.record_execution(hand_id, execution_result.clone()).await;
  
          execution_result
      }
@@ -223,12 +261,144 @@ impl HandExecutor {
     }
 
     async fn execute_hand_logic(&self, hand: &Hand, ctx: &ExecutionContext) -> HandOutput {
+        let mut output = if let Some(agent) = &self.agent {
+            let task = self.build_agent_task(hand, ctx).await;
+            
+            match agent.process(task).await {
+                Ok(result) => {
+                    self.convert_to_hand_output(result)
+                }
+                Err(e) => HandOutput {
+                    success: false,
+                    data: serde_json::json!({}),
+                    error: Some(e.to_string()),
+                }
+            }
+        } else {
+            self.default_execution(hand, ctx).await
+        };
+
+        if !hand.skill_calls.is_empty() {
+            let skill_results = self.execute_skill_calls(&hand.skill_calls, &output, ctx).await;
+            output.data = serde_json::json!({
+                "hand_result": output.data,
+                "skill_results": skill_results,
+            });
+        }
+
+        output
+    }
+
+    async fn execute_skill_calls(
+        &self,
+        skill_calls: &[SkillCall],
+        hand_output: &HandOutput,
+        _ctx: &ExecutionContext,
+    ) -> Vec<serde_json::Value> {
+        let mut results = Vec::new();
+
+        if let Some(ref registry) = self.skill_registry {
+            for call in skill_calls {
+                let should_execute = self.evaluate_condition(&call.condition, hand_output).await;
+                
+                if should_execute
+                    && let Some(skill) = registry.get_skill(&call.skill_id).await {
+                        let input = self.render_template(&call.input_template, hand_output);
+                        
+                        let result = serde_json::json!({
+                            "skill_id": call.skill_id,
+                            "skill_name": skill.name,
+                            "input": input,
+                            "executed": true,
+                        });
+                        results.push(result);
+                    }
+            }
+        }
+
+        results
+    }
+
+    async fn evaluate_condition(&self, condition: &str, output: &HandOutput) -> bool {
+        if condition.is_empty() {
+            return true;
+        }
+
+        match condition {
+            "always" => true,
+            "on_success" => output.success,
+            "on_failure" => !output.success,
+            _ => {
+                tracing::warn!("Unknown condition: {}", condition);
+                false
+            }
+        }
+    }
+
+    fn render_template(&self, template: &str, output: &HandOutput) -> String {
+        let json_str = serde_json::to_string(&output.data).unwrap_or_default();
+        template.replace("{{output}}", &json_str)
+    }
+
+    async fn build_agent_task(&self, hand: &Hand, ctx: &ExecutionContext) -> TaskRequest {
+        let input_content = ctx.input.as_str().unwrap_or("");
+        
+        let content = if hand.system_prompt.is_empty() {
+            input_content.to_string()
+        } else {
+            format!("System: {}\n\nUser: {}", hand.system_prompt, input_content)
+        };
+
+        TaskRequest::new(
+            TaskType::Conversation,
+            TaskInput::Text { content },
+        )
+    }
+
+    fn convert_to_hand_output(&self, result: TaskResult) -> HandOutput {
+        use crate::task::TaskOutput;
+        
+        let (data, error) = match result.output {
+            Some(TaskOutput::Text { content }) => {
+                (serde_json::json!({ "text": content }), None)
+            }
+            Some(TaskOutput::ToolResult { result }) => {
+                (result, None)
+            }
+            Some(TaskOutput::Code { language, code }) => {
+                (serde_json::json!({ "language": language, "code": code }), None)
+            }
+            Some(TaskOutput::Data { data }) => {
+                (data, None)
+            }
+            Some(TaskOutput::Message { message }) => {
+                (serde_json::json!({ "message": message }), None)
+            }
+            Some(TaskOutput::Multiple { outputs }) => {
+                (serde_json::json!({ "outputs": outputs }), None)
+            }
+            Some(TaskOutput::SearchResult { results }) => {
+                (serde_json::json!({ "results": results }), None)
+            }
+            None => {
+                (serde_json::json!({}), result.error.clone())
+            }
+        };
+
+        HandOutput {
+            success: result.status == TaskStatus::Completed,
+            data,
+            error,
+        }
+    }
+
+    async fn default_execution(&self, hand: &Hand, ctx: &ExecutionContext) -> HandOutput {
         let output_data = serde_json::json!({
             "hand_id": hand.id,
             "name": hand.name,
             "description": hand.description,
             "input": ctx.input,
-            "message": format!("Executed hand: {} (stub - integrate with Agent)", hand.name)
+            "message": format!("Executed hand: {} (default mode)", hand.name)
         });
 
         HandOutput {
@@ -342,7 +512,7 @@ mod tests {
 
         let result = executor.execute("test", ctx).await;
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("not enabled"));
+        assert!(result.error.unwrap().contains("disabled"));
     }
 
     #[tokio::test]

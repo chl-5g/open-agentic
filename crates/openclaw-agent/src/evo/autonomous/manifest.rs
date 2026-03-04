@@ -197,8 +197,15 @@ impl HandBuilder {
                 max_retries: self.settings.max_retries,
                 timeout_secs: self.settings.timeout_secs,
                 retry_delay_secs: self.settings.retry_delay_secs,
+                evolve_on_failure: false,
+                evolve_on_success: false,
+                evolve_threshold: 0.5,
+                enable_learning: true,
+                optimization_interval: 10,
             },
             state: HandState::default(),
+            predictive_config: None,
+            skill_calls: vec![],
         }
     }
 }

@@ -48,6 +48,11 @@ pub struct ExecutionConfig {
     pub max_retries: u32,
     pub timeout_secs: u64,
     pub retry_delay_secs: u64,
+    pub evolve_on_failure: bool,
+    pub evolve_on_success: bool,
+    pub evolve_threshold: f64,
+    pub enable_learning: bool,
+    pub optimization_interval: u32,
 }
 
 impl Default for ExecutionConfig {
@@ -56,12 +61,39 @@ impl Default for ExecutionConfig {
             max_retries: 3,
             timeout_secs: 300,
             retry_delay_secs: 60,
+            evolve_on_failure: false,
+            evolve_on_success: false,
+            evolve_threshold: 0.5,
+            enable_learning: true,
+            optimization_interval: 10,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PredictiveConfig {
+    pub enabled: bool,
+    pub trigger_on_time: Option<String>,
+    #[serde(default)]
+    pub trigger_on_sequence: Vec<String>,
+    pub prewarm_seconds: u32,
+}
+
+impl Default for PredictiveConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            trigger_on_time: None,
+            trigger_on_sequence: Vec::new(),
+            prewarm_seconds: 300,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum HandStatus {
+    #[default]
     Active,
     Paused,
     Running,
@@ -69,13 +101,9 @@ pub enum HandStatus {
     Disabled,
 }
 
-impl Default for HandStatus {
-    fn default() -> Self {
-        Self::Active
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct HandState {
     pub status: HandStatus,
     pub last_execution: Option<chrono::DateTime<chrono::Utc>>,
@@ -84,17 +112,6 @@ pub struct HandState {
     pub consecutive_failures: u32,
 }
 
-impl Default for HandState {
-    fn default() -> Self {
-        Self {
-            status: HandStatus::default(),
-            last_execution: None,
-            last_output: None,
-            execution_count: 0,
-            consecutive_failures: 0,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GuardrailAction {
@@ -124,6 +141,13 @@ pub struct MetricDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillCall {
+    pub skill_id: String,
+    pub input_template: String,
+    pub condition: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hand {
     pub id: String,
     pub name: String,
@@ -146,6 +170,10 @@ pub struct Hand {
     pub execution_config: ExecutionConfig,
     #[serde(default)]
     pub state: HandState,
+    #[serde(default)]
+    pub predictive_config: Option<PredictiveConfig>,
+    #[serde(default)]
+    pub skill_calls: Vec<SkillCall>,
 }
 
 impl Hand {
@@ -169,6 +197,8 @@ impl Hand {
             output_channels: Vec::new(),
             execution_config: ExecutionConfig::default(),
             state: HandState::default(),
+            predictive_config: None,
+            skill_calls: Vec::new(),
         }
     }
 

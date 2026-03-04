@@ -5,6 +5,7 @@ use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 
 use super::hand::{Hand, OutputFormat};
+use crate::channels::ChannelManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionResult {
@@ -40,13 +41,47 @@ pub struct OutputTemplate {
 
 pub struct HandOutputManager {
     templates: Arc<RwLock<HashMap<String, OutputTemplate>>>,
+    channel_manager: Option<Arc<ChannelManager>>,
 }
 
 impl HandOutputManager {
     pub fn new() -> Self {
         Self {
             templates: Arc::new(RwLock::new(HashMap::new())),
+            channel_manager: None,
         }
+    }
+
+    pub fn with_channel_manager(mut self, manager: Arc<ChannelManager>) -> Self {
+        self.channel_manager = Some(manager);
+        self
+    }
+
+    pub async fn send_to_channels(&self, hand: &Hand, result: &ExecutionResult) -> Result<(), String> {
+        if let Some(ref manager) = self.channel_manager {
+            let messages = self.format_result(hand, result).await;
+            
+            for (channel_type, message) in messages {
+                let send_msg = openclaw_channels::SendMessage {
+                    chat_id: channel_type.clone(),
+                    message_type: "text".to_string(),
+                    content: message,
+                    title: Some(hand.name.clone()),
+                    url: None,
+                    at_mobiles: None,
+                    mentioned_list: None,
+                    base64: None,
+                    md5: None,
+                    articles: None,
+                    media_id: None,
+                };
+                
+                if let Err(e) = manager.send_to_channel(&channel_type, send_msg).await {
+                    tracing::error!("Failed to send to channel {}: {}", channel_type, e);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn format_result(&self, hand: &Hand, result: &ExecutionResult) -> Vec<(String, String)> {

@@ -1,8 +1,8 @@
 use chrono::Utc;
 
 use super::hand::{
-    ExecutionConfig, Guardrail, GuardrailAction, Hand, HandCategory, HandOutputChannel,
-    HandState, MetricDefinition, OutputFormat, ToolDefinition,
+    ExecutionConfig, Guardrail, GuardrailAction, Hand, HandCategory,
+    HandState, MetricDefinition, ToolDefinition,
 };
 use super::schedule::ScheduleType;
 
@@ -69,6 +69,8 @@ Always cite your sources and provide evidence for claims."#.to_string(),
         output_channels: vec![],
         execution_config: ExecutionConfig::default(),
         state: HandState::default(),
+        predictive_config: None,
+        skill_calls: vec![],
     }
 }
 
@@ -76,10 +78,10 @@ pub fn collector_hand() -> Hand {
     let now = Utc::now();
     Hand {
         id: "collector".to_string(),
-        name: "OSINT Collector".to_string(),
-        description: "Monitors targets continuously, performs change detection, builds knowledge graph, sends critical alerts".to_string(),
+        name: "Data Collector".to_string(),
+        description: "Collects data from various sources on a scheduled basis".to_string(),
         category: HandCategory::Collection,
-        schedule: Some(ScheduleType::Cron("0 */6 * * *".to_string())),
+        schedule: Some(ScheduleType::Cron("0 */4 * * *".to_string())),
         system_prompt: r#"You are an OSINT-grade intelligence collector. Your task is to:
 1. Monitor specified targets (companies, people, topics)
 2. Continuously collect information
@@ -136,6 +138,8 @@ Be thorough and accurate in your intelligence gathering."#.to_string(),
         output_channels: vec![],
         execution_config: ExecutionConfig::default(),
         state: HandState::default(),
+        predictive_config: None,
+        skill_calls: vec![],
     }
 }
 
@@ -211,6 +215,8 @@ Focus on quality leads that match the ICP criteria."#.to_string(),
         output_channels: vec![],
         execution_config: ExecutionConfig::default(),
         state: HandState::default(),
+        predictive_config: None,
+        skill_calls: vec![],
     }
 }
 
@@ -278,6 +284,8 @@ Be honest about uncertainty and update your beliefs based on evidence."#.to_stri
         output_channels: vec![],
         execution_config: ExecutionConfig::default(),
         state: HandState::default(),
+        predictive_config: None,
+        skill_calls: vec![],
     }
 }
 

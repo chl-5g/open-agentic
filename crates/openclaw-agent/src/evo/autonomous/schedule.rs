@@ -10,6 +10,7 @@ pub enum ScheduleType {
     Cron(String),
     Interval(u64),
     OneShot(DateTime<Utc>),
+    Event(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub struct Schedule {
     pub last_run: Option<DateTime<Utc>>,
     pub next_run: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub event_triggers: Vec<String>,
 }
 
 impl Schedule {
@@ -38,6 +40,7 @@ impl Schedule {
             last_run: None,
             next_run,
             created_at: Utc::now(),
+            event_triggers: vec![],
         }
     }
 
@@ -52,6 +55,7 @@ impl Schedule {
                     None
                 }
             }
+            ScheduleType::Event(_) => None,
         }
     }
 
@@ -75,7 +79,7 @@ impl Schedule {
             {
                 return Some(next);
             }
-            next = next + chrono::Duration::minutes(1);
+            next += chrono::Duration::minutes(1);
         }
         None
     }
@@ -193,7 +197,7 @@ impl ScheduleManager {
 
     pub fn get_event_receiver(&self) -> tokio::sync::mpsc::Receiver<ScheduleEvent> {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
-        tx.clone();
+        let _ = tx.clone();
         rx
     }
 

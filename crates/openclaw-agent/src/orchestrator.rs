@@ -12,9 +12,9 @@ use openclaw_memory::MemoryManager;
 
 use crate::agent::Agent;
 use crate::device_tool_registry::DeviceToolRegistry;
-use crate::evo::registry::{SharedSkillRegistry, DynamicSkill};
+use crate::evo::registry::SharedSkillRegistry;
 use crate::evo::EvolutionEngine;
-use crate::evo::autonomous::{self, HandExecutor, HandOutputManager};
+use crate::evo::autonomous::{HandExecutor, HandOutputManager};
 use crate::evo::autonomous::executor::ExecutionContext;
 use crate::evo::autonomous::output::ExecutionResult as HandOutputResult;
 use crate::task::{TaskClassification, TaskClassifier, TaskOutput, TaskRequest, TaskResult, TaskStatus, TaskType};
@@ -374,17 +374,14 @@ impl Orchestrator {
         let result = agent.process(task.clone()).await;
 
         // 如果失败且启用了进化，尝试触发进化
-        if let Ok(ref task_result) = result {
-            if task_result.status == TaskStatus::Failed && self.should_try_evolution(task_result) {
-                if let Some(evolution_result) = self.try_evolution(agent_id, &task).await {
-                    if evolution_result {
+        if let Ok(ref task_result) = result
+            && task_result.status == TaskStatus::Failed && self.should_try_evolution(task_result)
+                && let Some(evolution_result) = self.try_evolution(agent_id, &task).await
+                    && evolution_result {
                         // 进化成功，重试任务
                         info!("Evolution successful, retrying task {}", task.id);
                         return agent.process(task).await;
                     }
-                }
-            }
-        }
 
         result
     }
@@ -416,8 +413,8 @@ impl Orchestrator {
 
         let exec_result = executor.execute(&hand_id, ctx).await;
 
-        if let Some(output_manager) = &self.hand_output_manager {
-            if let Some(hand) = executor.get_hand(&hand_id).await {
+        if let Some(output_manager) = &self.hand_output_manager
+            && let Some(hand) = executor.get_hand(&hand_id).await {
                 let output_result = HandOutputResult {
                     execution_id: exec_result.task_id.clone(),
                     hand_id: hand_id.clone(),
@@ -434,7 +431,6 @@ impl Orchestrator {
                     info!("Sending Hand result to channel: {} - {}", channel_type, message.len());
                 }
             }
-        }
 
         if exec_result.success {
             Ok(TaskResult::success(
@@ -572,7 +568,7 @@ impl Orchestrator {
         let result = executor
             .execute(uuid::Uuid::new_v4().to_string(), input)
             .await
-            .map_err(|e| OpenClawError::Execution(e))?;
+            .map_err(OpenClawError::Execution)?;
 
         Ok(result)
     }
@@ -590,7 +586,7 @@ impl Orchestrator {
         let result = executor
             .execute_with_context(uuid::Uuid::new_v4().to_string(), input, context)
             .await
-            .map_err(|e| OpenClawError::Execution(e))?;
+            .map_err(OpenClawError::Execution)?;
 
         Ok(result)
     }
@@ -770,14 +766,17 @@ mod tests {
         use crate::evo::autonomous::presets::researcher_hand;
         use crate::evo::autonomous::schedule::ScheduleManager;
         use crate::evo::autonomous::metrics::MetricsCollector;
+        use crate::evo::autonomous::HandRegistry;
+        use crate::evo::autonomous::HandExecutor;
 
-        let registry = Arc::new(autonomous::HandRegistry::new());
-        let hand = researcher_hand();
+        let registry = Arc::new(HandRegistry::new());
+        let mut hand = researcher_hand();
+        hand.enable();
         registry.register(hand).await;
 
         let schedule_manager = Arc::new(ScheduleManager::new());
         let metrics = Arc::new(MetricsCollector::new());
-        let executor = Arc::new(autonomous::HandExecutor::new(
+        let executor = Arc::new(HandExecutor::new(
             registry,
             schedule_manager,
             metrics,
@@ -801,11 +800,13 @@ mod tests {
     async fn test_orchestrator_execute_hand_not_found() {
         use crate::evo::autonomous::schedule::ScheduleManager;
         use crate::evo::autonomous::metrics::MetricsCollector;
+        use crate::evo::autonomous::HandRegistry;
+        use crate::evo::autonomous::HandExecutor;
 
-        let registry = Arc::new(autonomous::HandRegistry::new());
+        let registry = Arc::new(HandRegistry::new());
         let schedule_manager = Arc::new(ScheduleManager::new());
         let metrics = Arc::new(MetricsCollector::new());
-        let executor = Arc::new(autonomous::HandExecutor::new(
+        let executor = Arc::new(HandExecutor::new(
             registry,
             schedule_manager,
             metrics,
@@ -831,14 +832,17 @@ mod tests {
         use crate::evo::autonomous::presets::collector_hand;
         use crate::evo::autonomous::schedule::ScheduleManager;
         use crate::evo::autonomous::metrics::MetricsCollector;
+        use crate::evo::autonomous::HandRegistry;
+        use crate::evo::autonomous::HandExecutor;
 
-        let registry = Arc::new(autonomous::HandRegistry::new());
-        let hand = collector_hand();
+        let registry = Arc::new(HandRegistry::new());
+        let mut hand = collector_hand();
+        hand.enable();
         registry.register(hand).await;
 
         let schedule_manager = Arc::new(ScheduleManager::new());
         let metrics = Arc::new(MetricsCollector::new());
-        let executor = Arc::new(autonomous::HandExecutor::new(
+        let executor = Arc::new(HandExecutor::new(
             registry,
             schedule_manager,
             metrics,

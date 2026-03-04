@@ -1,5 +1,5 @@
 use super::{
-    HandMatch, HandMatchType, Intent, SkillMatch, TaskClassification, TaskInput, TaskRequest,
+    HandMatch, HandMatchType, Intent, SkillMatch, TaskClassification, TaskRequest,
     TaskType,
 };
 
@@ -20,12 +20,15 @@ impl TaskClassifier {
         let content = request.input.content();
 
         if let Some(hand_match) = self.hand_detector.detect(content).await {
-            if !hand_match.hand_id.is_empty() {
-                return TaskClassification::Hand {
-                    hand_id: hand_match.hand_id,
-                    input: Some(content.to_string()),
-                };
-            }
+            let hand_id = if hand_match.hand_id.is_empty() {
+                "default".to_string()
+            } else {
+                hand_match.hand_id
+            };
+            return TaskClassification::Hand {
+                hand_id,
+                input: Some(content.to_string()),
+            };
         }
 
         if let Some(skill_match) = self.rule_matcher.match_task(content) {
