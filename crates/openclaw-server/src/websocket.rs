@@ -1,90 +1,96 @@
 //! WebSocket 支持
 
 use axum::{
-    Router,
-    extract::State,
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::State,
     response::Response,
     routing::get,
+    Router,
 };
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
+use openclaw_ws::{JsonCodec, RoomId, WsRoom, WsServerState, WsMessageCodec};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[derive(Clone)]
-pub struct WebSocketState {
-    pub connections: Arc<RwLock<Vec<String>>>,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ServerMessage {
+    pub msg_type: String,
+    pub content: String,
 }
 
-impl Default for WebSocketState {
+pub struct AppWebSocketState {
+    pub room: Arc<WsRoom<JsonCodec<ServerMessage>>>,
+}
+
+impl AppWebSocketState {
+    pub fn new() -> Self {
+        let codec = JsonCodec::<ServerMessage>::new();
+        let room = Arc::new(WsRoom::new(RoomId::new("app"), codec));
+        Self { room }
+    }
+}
+
+impl Default for AppWebSocketState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl WebSocketState {
-    pub fn new() -> Self {
-        Self {
-            connections: Arc::new(RwLock::new(Vec::new())),
-        }
-    }
-}
-
 pub fn websocket_router() -> Router {
-    let state = WebSocketState::new();
+    let state = AppWebSocketState::new();
+    let room = state.room.clone();
+
     Router::new()
         .route("/ws", get(websocket_handler))
-        .with_state(Arc::new(RwLock::new(state)))
+        .with_state(Arc::new(RwLock::new(WsServerState { room })))
 }
 
 async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(state): State<Arc<RwLock<WebSocketState>>>,
+    State(state): State<Arc<RwLock<WsServerState<JsonCodec<ServerMessage>>>>>,
 ) -> Response {
-    let connections = {
+    let room = {
         let s = state.read().await;
-        s.connections.clone()
+        s.room.clone()
     };
 
-    ws.on_upgrade(move |socket| handle_socket(socket, connections))
+    ws.on_upgrade(move |socket| handle_socket(socket, room))
 }
 
-async fn handle_socket(socket: WebSocket, connections: Arc<RwLock<Vec<String>>>) {
-    let (mut sender, mut receiver) = socket.split();
+async fn handle_socket(
+    socket: WebSocket,
+    room: Arc<WsRoom<JsonCodec<ServerMessage>>>,
+) {
+    use openclaw_ws::WsConnection;
 
-    let conn_id = uuid::Uuid::new_v4().to_string();
-    connections.write().await.push(conn_id.clone());
+    let (mut _sender, mut receiver) = socket.split();
 
-    tracing::info!("WebSocket client connected: {}", conn_id);
+    let codec = room.codec().clone();
+    let connection = WsConnection::new(codec.clone());
+    let conn_id = connection.id.clone();
 
-    while let Some(msg) = receiver.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                tracing::info!("Received: {}", text);
+    room.join(connection).await.ok();
 
-                let response = format!("Echo: {}", text);
-                if sender.send(Message::Text(response.into())).await.is_err() {
-                    break;
+    loop {
+        tokio::select! {
+            msg = receiver.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Some(decoded) = codec.decode(text.as_bytes()) {
+                            tracing::info!("Received from {}: {:?}", conn_id.0, decoded);
+                            let _ = room.broadcast(&decoded).await;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => {
+                        break;
+                    }
+                    _ => {}
                 }
-            }
-            Ok(Message::Binary(data)) => {
-                tracing::info!("Received binary: {} bytes", data.len());
-            }
-            Ok(Message::Ping(data)) => {
-                let _ = sender.send(Message::Pong(data)).await;
-            }
-            Ok(Message::Pong(_)) => {}
-            Ok(Message::Close(_)) => {
-                tracing::info!("Client closed connection");
-                break;
-            }
-            Err(e) => {
-                tracing::error!("WebSocket error: {}", e);
-                break;
             }
         }
     }
 
-    connections.write().await.retain(|id| *id != conn_id);
-    tracing::info!("WebSocket client disconnected: {}", conn_id);
+    room.leave(&conn_id).await.ok();
+    tracing::info!("WebSocket connection {} closed", conn_id.0);
 }

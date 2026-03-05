@@ -20,6 +20,7 @@ openclaw-device.workspace = true
 openclaw-voice.workspace = true
 openclaw-tools.workspace = true
 openclaw-acp.workspace = true
+openclaw-ws.workspace = true
 openclaw-sandbox = { workspace = true, features = ["full-security"] }
 reqwest = { workspace = true }
 regex.workspace = true

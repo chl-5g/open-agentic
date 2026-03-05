@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 openclaw-core.workspace = true
+openclaw-ws.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 futures.workspace = true

@@ -17,6 +17,7 @@ members = [
     "crates/openclaw-device",
     "crates/openclaw-security",
     "crates/openclaw-acp",
+    "crates/openclaw-ws",
 ]
 
 [workspace.package]
@@ -143,6 +144,7 @@ openclaw-tools = { path = "crates/openclaw-tools" }
 openclaw-device = { path = "crates/openclaw-device" }
 openclaw-security = { path = "crates/openclaw-security" }
 openclaw-acp = { path = "crates/openclaw-acp" }
+openclaw-ws = { path = "crates/openclaw-ws" }
 
 [profile.release]
 opt-level = 3
