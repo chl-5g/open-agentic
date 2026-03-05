@@ -19,6 +19,8 @@
 | 🚪 **智能技能准入** | 环境检测 (bins/env/files)，技能根据系统环境自动启用/禁用 |
 | 🔄 **跨格式兼容** | 支持 OpenClaw、AgentSkills 两种技能格式 |
 | 🧬 **Evo 技能进化** | LLM 自动生成新技能，ACP 广播跨 Agent 传播 |
+| 📡 **ACP 协议** | Agent Capability Protocol，分布式 Agent 能力发现与协作 |
+| 🌐 **去中心化通道** | Discord Gateway、消息通道集成框架 |
 
 ## 🏗️ 架构设计
 
@@ -28,29 +30,45 @@
 - **可扩展**: Provider 模式支持灵活扩展 AI 提供商、消息通道、工具类型
 - **安全性**: 多层安全防护，敏感操作沙箱隔离，完整审计日志
 - **高性能**: 异步 Rust (tokio)，流式响应，连接池
+- **解耦**: 通过 `openclaw-ws` 模块实现 WebSocket 通用解耦
 
 ### 核心模块
 
 ```
 openclaw-rust/
 ├── crates/
-│   ├── openclaw-core      # 核心类型定义、配置结构、错误类型
-│   ├── openclaw-ai        # AI Provider 抽象层 (OpenAI/Anthropic/DeepSeek...)
-│   ├── openclaw-memory    # 三层记忆系统 (工作/短期/长期)
-│   ├── openclaw-vector    # 向量存储抽象 (Qdrant/Milvus/Chroma...)
-│   ├── openclaw-channels  # 消息通道集成框架
-│   ├── openclaw-agent     # 多智能体系统 + Provider 抽象 + Evo 技能进化引擎
-│   ├── openclaw-voice     # STT/TTS 语音服务
-│   ├── openclaw-server    # HTTP/WebSocket Gateway 服务
-│   ├── openclaw-canvas    # 实时协作画布
-│   ├── openclaw-browser   # 浏览器自动化 (chromiumoxide)
-│   ├── openclaw-sandbox   # Docker/WASM 安全沙箱
-│   ├── openclaw-tools     # 工具系统 (Cron/Webhook/技能/MCP)
-│   ├── openclaw-device   # 设备节点 + 嵌入式设备控制
-│   ├── openclaw-security # 安全管线 (过滤/验证/审计)
-│   ├── openclaw-cli       # CLI 命令行工具
-│   └── openclaw-testing  # 测试工具与 fixtures
+│   ├── openclaw-core       # 核心类型定义、配置结构、错误类型
+│   ├── openclaw-ai         # AI Provider 抽象层 (OpenAI/Anthropic/DeepSeek...)
+│   ├── openclaw-memory     # 三层记忆系统 (工作/短期/长期)
+│   ├── openclaw-vector     # 向量存储抽象 (Qdrant/Milvus/Chroma...)
+│   ├── openclaw-channels   # 消息通道集成框架 (Discord/Telegram/钉钉等)
+│   ├── openclaw-agent      # 多智能体系统 + Provider 抽象 + Evo 技能进化引擎
+│   ├── openclaw-voice      # STT/TTS 语音服务
+│   ├── openclaw-server     # HTTP/WebSocket Gateway 服务
+│   ├── openclaw-canvas     # 实时协作画布 + CRDT 冲突解决
+│   ├── openclaw-browser    # 浏览器自动化 (chromiumoxide)
+│   ├── openclaw-sandbox    # Docker/WASM 安全沙箱
+│   ├── openclaw-tools      # 工具系统 (Cron/Webhook/技能/MCP)
+│   ├── openclaw-device     # 设备节点 + 嵌入式设备控制 + HAL
+│   ├── openclaw-security   # 安全管线 (过滤/验证/审计)
+│   ├── openclaw-acp        # Agent Capability Protocol 实现
+│   ├── openclaw-ws         # 通用 WebSocket 模块 (连接/房间/消息编解码)
+│   ├── openclaw-cli        # CLI 命令行工具
+│   └── openclaw-testing    # 测试工具与 fixtures
 ```
+
+### 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| **运行时** | tokio (异步 Runtime) |
+| **Web 框架** | axum |
+| **WebSocket** | tokio-tungstenite + openclaw-ws |
+| **浏览器控制** | chromiumoxide (CDP) |
+| **序列化** | serde + serde_json |
+| **向量存储** | qdrant-client, lancedb |
+| **容器** | bollard (Docker API) |
+| **错误处理** | thiserror, anyhow |
 
 ## 🧠 AI 能力
 
@@ -67,6 +85,14 @@ openclaw-rust/
 - 函数调用 (Function Calling)
 - 文本嵌入 (Embedding)
 - OAuth 认证支持
+
+### Agent 类型
+
+- **Orchestrator**: 任务编排与分解
+- **Researcher**: 信息检索与研究
+- **Coder**: 代码生成与调试
+- **Writer**: 内容创作
+- **Custom**: 用户自定义 Agent
 
 ## 📡 消息通道
 
@@ -90,19 +116,21 @@ Matrix (去中心化) | WebChat (自定义 Webhook) | Email | SMS
 
 ### 自动化
 
-- **浏览器控制**: Puppeteer 风格 API，导航/点击/输入/截图/PDF
+- **浏览器控制**: Puppeteer 风格 API，导航/点击/输入/截图/PDF/文件上传下载
 - **定时任务**: Cron 表达式调度，自动执行
 - **Webhook**: 事件触发，签名验证
 
 ### 设备控制
 
 - **相机/屏幕**: 拍照、录像、屏幕录制
+- **系统信息**: CPU、内存、磁盘、网络监控
 - **嵌入式设备**:
   - ARM: Raspberry Pi, OrangePi, Jetson, Coral
   - Arduino: Uno, Nano, Mega, Due
   - ESP32: ESP32-S3, ESP32-C3, ESP32-C6, ESP32-P4
   - STM32: STM32F1, STM32F4, STM32H7
   - RISC-V: Kendryte K210, Sipeed MaixCDK, Allwinner D1, StarFive JH7100, HiFive Unmatched
+- **HAL 抽象层**: 统一硬件抽象，支持多种嵌入式平台
 
 ### 扩展集成
 
@@ -116,17 +144,72 @@ Matrix (去中心化) | WebChat (自定义 Webhook) | Email | SMS
 - **LLM 进化生成**: LLM 自动分析任务模式，生成新技能
 - **跨 Agent 传播**: 通过 ACP 广播分发技能到整个 Agent 网络
 
-```bash
-# 使用 agent 命令
-openclaw-rust agent --message "帮我写个排序算法"
+## 🎨 实时协作画布
 
-# 技能文件示例 (SKILL.md)
-# Skill: code_generator
-# Type: prompt
-# Instructions: 当用户请求编写代码时，使用 exec 执行...
-# Gating
-#   requires:
-#     bins: [python3, node]
+### 功能特性
+
+- **WebSocket 实时协作**: 基于 `openclaw-ws` 模块的房间通信
+- **CRDT 冲突解决**: 支持多用户并发编辑
+- **光标同步**: 实时显示其他用户光标位置
+- **元素操作**: 矩形、椭圆、线条、文本、图片等
+- **历史记录**: 操作撤销/重做
+
+### 架构
+
+```
+openclaw-canvas/
+├── canvas.rs          # 画布管理
+├── collaboration.rs   # 协作会话管理
+├── draw/              # 图形绘制
+├── types/             # 类型定义
+└── websocket/         # WebSocket 客户端/服务器
+```
+
+## 📡 ACP 协议
+
+Agent Capability Protocol (ACP) 是一个分布式 Agent 能力发现与协作协议。
+
+### 核心组件
+
+- **Capability**: Agent 能力描述
+- **Gene**: 技能基因，可跨 Agent 传播
+- **Router**: 消息路由
+- **Transport**: 传输层 (WebSocket/HTTP)
+
+### 消息类型
+
+```rust
+pub enum AcpMessage {
+    Discovery,      // 能力发现
+    Invoke,         // 能力调用
+    Response,       // 响应
+    GeneTransfer,   // 技能基因传递
+    Heartbeat,      // 心跳
+}
+```
+
+## 🔌 统一 WebSocket 模块 (openclaw-ws)
+
+为解耦 WebSocket 实现，新增 `openclaw-ws` 通用模块：
+
+```rust
+use openclaw_ws::{JsonCodec, RoomId, WsRoom, WsConnection, WsMessageCodec};
+
+// 定义消息类型
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ServerMessage {
+    pub msg_type: String,
+    pub content: String,
+}
+
+// 创建房间
+let codec = JsonCodec::<ServerMessage>::new();
+let room = Arc::new(WsRoom::new(RoomId::new("my-room"), codec));
+
+// 处理连接
+let connection = WsConnection::new(codec);
+room.join(connection).await?;
+room.broadcast(&msg).await?;
 ```
 
 ## 🚀 快速开始
@@ -162,7 +245,7 @@ cargo run -- doctor
 | `daemon start` | 启动后台守护进程 |
 | `daemon install` | 安装为系统服务 |
 
-## � API 端点
+## 🔧 API 端点
 
 ### 基础 API
 
@@ -189,6 +272,15 @@ cargo run -- doctor
 | `/page/{id}/goto` | POST | 导航 |
 | `/page/{id}/click` | POST | 点击 |
 | `/page/{id}/screenshot` | POST | 截图 |
+
+### 设备 API
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/device/nodes` | GET | 设备节点列表 |
+| `/device/{id}/camera` | POST | 拍照 |
+| `/device/{id}/screen` | GET | 屏幕截图 |
+| `/device/{id}/notify` | POST | 发送通知 |
 
 ## ⚙️ 配置
 
@@ -249,7 +341,12 @@ export OPENCLAW_PORT=18789
 ### 运行测试
 
 ```bash
+# 所有测试
 cargo test
+
+# 单模块测试
+cargo test -p openclaw-ws
+cargo test -p openclaw-server
 ```
 
 ### 代码检查
@@ -285,6 +382,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件。
 - [chromiumoxide](https://github.com/mattsse/chromiumoxide) - Chrome DevTools Protocol 客户端
 - [bollard](https://github.com/fussybeaver/bollard) - Docker API 客户端
 - [axum](https://github.com/tokio-rs/axum) - Web 框架
+- [tokio](https://github.com/tokio-rs/tokio) - 异步运行时
 
 ---
 
