@@ -75,6 +75,7 @@ pub use openclaw_core::{OpenClawError, Result};
 // === Internal (crate-only) ===
 
 pub mod channels;
+pub mod collaboration;
 pub mod decision;
 pub mod dependencies;
 pub mod device_tool_registry;
