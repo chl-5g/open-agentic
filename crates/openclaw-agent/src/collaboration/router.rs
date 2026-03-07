@@ -273,7 +273,7 @@ mod tests {
         };
         
         let _ = router.add_route(rule).await;
-        router.remove_route("agent_1", "agent_2").await;
+        let _ = router.remove_route("agent_1", "agent_2").await;
         
         let routes = router.list_routes("agent_1").await;
         assert!(routes.is_empty());
@@ -361,7 +361,7 @@ mod tests {
     async fn test_fallback_agent() {
         let router = MessageRouter::default();
         
-        router.set_fallback_agent("agent_1", "fallback_agent".to_string()).await;
+        let _ = router.set_fallback_agent("agent_1", "fallback_agent".to_string()).await;
         
         let message = create_test_message();
         let result = router.route(&message).await;
