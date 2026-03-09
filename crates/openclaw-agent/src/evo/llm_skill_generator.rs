@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use openclaw_ai::{AIProvider, ChatRequest};
 use openclaw_core::Result;
 
