@@ -10,6 +10,8 @@
 |------|------|
 | 🤖 **多智能体系统** | Orchestrator、Researcher、Coder、Writer 等多种 Agent 类型，支持任务自动分解与多 Agent 协作 |
 | 🧠 **三层记忆架构** | 工作记忆(最近消息) → 短期记忆(压缩摘要) → 长期记忆(向量存储)，支持 per-session 隔离 |
+| 💾 **Memory 可插拔** | 支持 Qdrant/Milvus/Chroma/LancedB 向量存储，可灵活切换或禁用 |
+| 🗃️ **ClawHub 支持** | 远程技能市场，技能一键安装/更新/卸载，跨设备同步 |
 | 🗣️ **语音交互** | STT 语音识别 + TTS 语音合成，支持实时对话与语音唤醒 |
 | 🎨 **实时协作画布** | A2UI 可视化工作空间，WebSocket 实时协作，光标同步 |
 | 🌐 **多平台消息** | 15+ 消息通道集成 (Telegram、Discord、钉钉、企业微信、飞书等) |
@@ -66,7 +68,8 @@ openclaw-rust/
 | **WebSocket** | tokio-tungstenite + openclaw-ws |
 | **浏览器控制** | chromiumoxide (CDP) |
 | **序列化** | serde + serde_json |
-| **向量存储** | qdrant-client, lancedb |
+| **向量存储** | qdrant-client, lancedb, chroma-rust, milvus |
+| **远程技能** | ClawHub 客户端，一键安装/同步 |
 | **容器** | bollard (Docker API) |
 | **错误处理** | thiserror, anyhow |
 
