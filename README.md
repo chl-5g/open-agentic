@@ -2,7 +2,7 @@
 
 **OpenAgentic** — 开源 AI 手机 Agent，让 AI 帮你操作手机
 
-一个以 Android 无障碍服务为核心的 AI Agent 平台。用户通过自然语言下达任务，AI 自动理解屏幕内容并控制手机完成操作。数据本地化、开源可审计、支持本地大模型。
+一个以 Android 无障碍服务为核心的 AI Agent 平台。用户通过自然语言下达任务，AI 自动理解屏幕内容并控制手机完成操作。支持 100+ 大模型 API、数据本地化、开源可审计。
 
 ## 产品定位
 
@@ -15,9 +15,9 @@
 ```
 Android App（Kotlin，AccessibilityService）
     ↕ HTTP / WebSocket
-Rust Gateway（axum，端口 18789）
+Rust Gateway（axum + LiteLLM，端口 18789）
     ↕
-Ollama（本地 LLM）/ 云端 LLM（OpenAI、Anthropic、DeepSeek 等）
+100+ LLM API（OpenAI / Anthropic / Gemini / DeepSeek / Qwen / Ollama 等）
 ```
 
 ## 核心特性
