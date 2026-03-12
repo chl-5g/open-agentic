@@ -1,392 +1,225 @@
 # OpenAgentic
 
-🤖 **OpenAgentic** - 你的个人 AI 助手 (Rust 实现)
+**OpenAgentic** — 开源 AI 手机 Agent，让 AI 帮你操作手机
 
-一个功能丰富、模块化的 AI 助手平台，采用现代 Rust 技术栈构建，支持多智能体协作、语音交互、实时协作画布、浏览器自动化控制等功能。
+一个以 Android 无障碍服务为核心的 AI Agent 平台。用户通过自然语言下达任务，AI 自动理解屏幕内容并控制手机完成操作。数据本地化、开源可审计、支持本地大模型。
 
-## ✨ 核心特性
+## 产品定位
+
+- **形态**：Android App（类似豆包手机 / Manus）
+- **核心能力**：通过无障碍权限，AI 读取屏幕、模拟点击滑动、跨 App 执行用户任务
+- **差异化**：数据不上传、本地 LLM 推理（Ollama）、开源可审计、安全隐私优先
+
+## 技术架构
+
+```
+Android App（Kotlin，AccessibilityService）
+    ↕ HTTP / WebSocket
+Rust Gateway（axum，端口 18789）
+    ↕
+Ollama（本地 LLM）/ 云端 LLM（OpenAI、Anthropic、DeepSeek 等）
+```
+
+## 核心特性
 
 | 特性 | 描述 |
 |------|------|
-| 🤖 **多智能体系统** | Orchestrator、Researcher、Coder、Writer 等多种 Agent 类型，支持任务自动分解与多 Agent 协作 |
-| 🧠 **三层记忆架构** | 工作记忆(最近消息) → 短期记忆(压缩摘要) → 长期记忆(向量存储)，支持 per-session 隔离 |
-| 💾 **Memory 可插拔** | 支持 Qdrant/Milvus/Chroma/LancedB 向量存储，可灵活切换或禁用 |
-| 🗃️ **ClawHub 支持** | 远程技能市场，技能一键安装/更新/卸载，跨设备同步 |
-| 🗣️ **语音交互** | STT 语音识别 + TTS 语音合成，支持实时对话与语音唤醒 |
-| 🎨 **实时协作画布** | A2UI 可视化工作空间，WebSocket 实时协作，光标同步 |
-| 🌐 **多平台消息** | 15+ 消息通道集成 (Telegram、Discord、钉钉、企业微信、飞书等) |
-| 🔐 **安全沙箱** | Docker/WASM 双轨隔离，输入过滤/输出验证/审计日志/自我修复 |
-| 🛠️ **工具生态** | 浏览器控制、定时任务、Cron 调度、Webhook、设备节点、MCP 集成 |
-| 📝 **Prompt-Driven 技能** | 通过编写 SKILL.md 扩展 Agent 能力，技能自动注入 System Prompt |
-| 🚪 **智能技能准入** | 环境检测 (bins/env/files)，技能根据系统环境自动启用/禁用 |
-| 🔄 **跨格式兼容** | 支持 OpenAgentic、AgentSkills 两种技能格式 |
-| 🧬 **Evo 技能进化** | LLM 自动生成新技能，ACP 广播跨 Agent 传播 |
+| 🤖 **多智能体系统** | Orchestrator / Researcher / Coder / Writer 等多种 Agent，支持任务自动分解与协作 |
+| 🧠 **三层记忆** | 工作记忆 → 短期记忆（压缩摘要）→ 长期记忆（向量存储），per-session 隔离 |
+| 📱 **手机控制** | 通过 Android 无障碍服务读取屏幕、模拟操作、跨 App 执行任务 |
+| 🔐 **安全优先** | JWT 认证、安全沙箱（Docker/WASM）、输入过滤 / 输出验证 / 审计日志 |
+| 🗣️ **语音交互** | STT 语音识别 + TTS 语音合成 |
+| 🌐 **多平台消息** | 15+ 消息通道（Telegram、Discord、钉钉、企业微信、飞书等） |
+| 🛠️ **工具生态** | 浏览器控制、定时任务、Webhook、MCP 集成 |
 | 📡 **ACP 协议** | Agent Capability Protocol，分布式 Agent 能力发现与协作 |
-| 🌐 **去中心化通道** | Discord Gateway、消息通道集成框架 |
 
-## 🏗️ 架构设计
-
-### 设计理念
-
-- **模块化**: 每个 crate 独立负责单一职责，通过 trait 定义抽象接口
-- **可扩展**: Provider 模式支持灵活扩展 AI 提供商、消息通道、工具类型
-- **安全性**: 多层安全防护，敏感操作沙箱隔离，完整审计日志
-- **高性能**: 异步 Rust (tokio)，流式响应，连接池
-- **解耦**: 通过 `openagentic-ws` 模块实现 WebSocket 通用解耦
-
-### 核心模块
+## 项目结构
 
 ```
 open-agentic/
 ├── crates/
-│   ├── openagentic-core       # 核心类型定义、配置结构、错误类型
-│   ├── openagentic-ai         # AI Provider 抽象层 (OpenAI/Anthropic/DeepSeek...)
-│   ├── openagentic-memory     # 三层记忆系统 (工作/短期/长期)
-│   ├── openagentic-vector     # 向量存储抽象 (Qdrant/Milvus/Chroma...)
-│   ├── openagentic-channels   # 消息通道集成框架 (Discord/Telegram/钉钉等)
-│   ├── openagentic-agent      # 多智能体系统 + Provider 抽象 + Evo 技能进化引擎
-│   ├── openagentic-voice      # STT/TTS 语音服务
-│   ├── openagentic-server     # HTTP/WebSocket Gateway 服务
-│   ├── openagentic-canvas     # 实时协作画布 + CRDT 冲突解决
-│   ├── openagentic-browser    # 浏览器自动化 (chromiumoxide)
-│   ├── openagentic-sandbox    # Docker/WASM 安全沙箱
-│   ├── openagentic-tools      # 工具系统 (Cron/Webhook/技能/MCP)
-│   ├── openagentic-device     # 设备节点 + 嵌入式设备控制 + HAL
-│   ├── openagentic-security   # 安全管线 (过滤/验证/审计)
-│   ├── openagentic-acp        # Agent Capability Protocol 实现
-│   ├── openagentic-ws         # 通用 WebSocket 模块 (连接/房间/消息编解码)
-│   ├── openagentic-cli        # CLI 命令行工具
-│   └── openagentic-testing    # 测试工具与 fixtures
+│   ├── openagentic-core        # 核心类型、配置、错误
+│   ├── openagentic-ai          # AI Provider 抽象（OpenAI/Anthropic/DeepSeek/Ollama...）
+│   ├── openagentic-agent       # 多智能体系统 + 技能进化引擎
+│   ├── openagentic-server      # HTTP/WebSocket Gateway + JWT 认证
+│   ├── openagentic-memory      # 三层记忆系统
+│   ├── openagentic-vector      # 向量存储（Qdrant/LanceDB/Milvus）
+│   ├── openagentic-channels    # 消息通道集成
+│   ├── openagentic-voice       # STT/TTS 语音服务
+│   ├── openagentic-canvas      # 实时协作画布
+│   ├── openagentic-browser     # 浏览器自动化（chromiumoxide）
+│   ├── openagentic-sandbox     # Docker/WASM 安全沙箱
+│   ├── openagentic-tools       # 工具系统（Cron/Webhook/MCP）
+│   ├── openagentic-device      # 设备节点 + 嵌入式控制
+│   ├── openagentic-security    # 安全管线
+│   ├── openagentic-acp         # ACP 协议实现
+│   ├── openagentic-ws          # 通用 WebSocket 模块
+│   └── openagentic-cli         # CLI 命令行
+└── ui/                         # Web UI（React 19 + Vite + TailwindCSS）
 ```
 
-### 技术栈
+## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| **运行时** | tokio (异步 Runtime) |
-| **Web 框架** | axum |
-| **WebSocket** | tokio-tungstenite + openagentic-ws |
-| **浏览器控制** | chromiumoxide (CDP) |
+| **后端** | Rust 1.93+, axum 0.8, tokio |
+| **前端** | React 19, Vite, TailwindCSS, Zustand |
+| **移动端** | Kotlin, Jetpack Compose, AccessibilityService |
+| **AI** | 11+ Provider（OpenAI / Anthropic / Gemini / DeepSeek / Qwen / Ollama 等） |
+| **向量存储** | Qdrant, LanceDB, Milvus |
 | **序列化** | serde + serde_json |
-| **向量存储** | qdrant-client, lancedb, chroma-rust, milvus |
-| **远程技能** | ClawHub 客户端，一键安装/同步 |
+| **浏览器** | chromiumoxide (CDP) |
 | **容器** | bollard (Docker API) |
-| **错误处理** | thiserror, anyhow |
 
-## 🧠 AI 能力
+## Android App 计划
 
-### 支持的 AI 提供商
+### 功能模块
 
-- **国际**: OpenAI, Anthropic (Claude), Google (Gemini)
-- **国内**: 通义千问 (Qwen), 智谱 GLM, Moonshot (Kimi), 豆包 (Doubao), MiniMax, DeepSeek
-- **本地**: Ollama (本地大模型)
-- **自定义**: OpenAI 兼容 API
+1. **对话界面** — 自然语言输入任务，AI 返回执行方案
+2. **无障碍服务** — 读取屏幕内容、模拟点击/滑动/输入、跨 App 操作
+3. **屏幕理解** — 截图 + 视觉模型分析界面元素
+4. **任务编排** — 多步骤任务自动分解与顺序执行
+5. **操作确认** — 高风险操作（支付、删除等）需用户手动确认
+6. **连接管理** — 自动发现局域网 Gateway / 远程连接配置
 
-### 核心能力
+### 技术选型
 
-- 流式响应 (Streaming)
-- 函数调用 (Function Calling)
-- 文本嵌入 (Embedding)
-- OAuth 认证支持
+- **UI**: Jetpack Compose
+- **网络**: Retrofit / OkHttp
+- **异步**: Kotlin Coroutines + Flow
+- **系统控制**: AccessibilityService
+- **屏幕截图**: MediaProjection API
+- **本地存储**: Room
+- **最低版本**: Android 8.0 (API 26)
 
-### Agent 类型
+### 安全边界
 
-- **Orchestrator**: 任务编排与分解
-- **Researcher**: 信息检索与研究
-- **Coder**: 代码生成与调试
-- **Writer**: 内容创作
-- **Custom**: 用户自定义 Agent
+- 初期不碰支付、通讯录、短信等敏感操作
+- 高风险操作必须用户确认
+- 数据本地存储，不上传
+- 支持一键清除用户数据
 
-## 📡 消息通道
-
-### 国际平台
-
-Telegram | Discord | Slack | Microsoft Teams | WhatsApp | Signal | Zalo (越南)
-
-### 国内平台
-
-钉钉 | 企业微信 | 飞书
-
-### macOS
-
-iMessage (Apple 消息服务) | BlueBubbles (iMessage REST API)
-
-### 其他
-
-Matrix (去中心化) | WebChat (自定义 Webhook) | Email | SMS
-
-## 🛠️ 工具生态
-
-### 自动化
-
-- **浏览器控制**: Puppeteer 风格 API，导航/点击/输入/截图/PDF/文件上传下载
-- **定时任务**: Cron 表达式调度，自动执行
-- **Webhook**: 事件触发，签名验证
-
-### 设备控制
-
-- **相机/屏幕**: 拍照、录像、屏幕录制
-- **系统信息**: CPU、内存、磁盘、网络监控
-- **嵌入式设备**:
-  - ARM: Raspberry Pi, OrangePi, Jetson, Coral
-  - Arduino: Uno, Nano, Mega, Due
-  - ESP32: ESP32-S3, ESP32-C3, ESP32-C6, ESP32-P4
-  - STM32: STM32F1, STM32F4, STM32H7
-  - RISC-V: Kendryte K210, Sipeed MaixCDK, Allwinner D1, StarFive JH7100, HiFive Unmatched
-- **HAL 抽象层**: 统一硬件抽象，支持多种嵌入式平台
-
-### 扩展集成
-
-- **MCP**: Model Context Protocol 客户端 (Stdio/HTTP/SSE)
-- **技能系统**: ClawHub/内置/托管/工作区技能 (GoClaw/OpenAgentic/AgentSkills 兼容)
-
-### 技能进化 (Evo)
-
-- **Prompt-Driven 技能**: 用户编写 SKILL.md 扩展 Agent 能力
-- **自动准入检测**: 环境检测 (bins/env/files)，技能自动启用/禁用
-- **LLM 进化生成**: LLM 自动分析任务模式，生成新技能
-- **跨 Agent 传播**: 通过 ACP 广播分发技能到整个 Agent 网络
-
-## 🎨 实时协作画布
-
-### 功能特性
-
-- **WebSocket 实时协作**: 基于 `openagentic-ws` 模块的房间通信
-- **CRDT 冲突解决**: 支持多用户并发编辑
-- **光标同步**: 实时显示其他用户光标位置
-- **元素操作**: 矩形、椭圆、线条、文本、图片等
-- **历史记录**: 操作撤销/重做
-
-### 架构
-
-```
-openagentic-canvas/
-├── canvas.rs          # 画布管理
-├── collaboration.rs   # 协作会话管理
-├── draw/              # 图形绘制
-├── types/             # 类型定义
-└── websocket/         # WebSocket 客户端/服务器
-```
-
-## 📡 ACP 协议
-
-Agent Capability Protocol (ACP) 是一个分布式 Agent 能力发现与协作协议。
-
-### 核心组件
-
-- **Capability**: Agent 能力描述
-- **Gene**: 技能基因，可跨 Agent 传播
-- **Router**: 消息路由
-- **Transport**: 传输层 (WebSocket/HTTP)
-
-### 消息类型
-
-```rust
-pub enum AcpMessage {
-    Discovery,      // 能力发现
-    Invoke,         // 能力调用
-    Response,       // 响应
-    GeneTransfer,   // 技能基因传递
-    Heartbeat,      // 心跳
-}
-```
-
-## 🔌 统一 WebSocket 模块 (openagentic-ws)
-
-为解耦 WebSocket 实现，新增 `openagentic-ws` 通用模块：
-
-```rust
-use openagentic_ws::{JsonCodec, RoomId, WsRoom, WsConnection, WsMessageCodec};
-
-// 定义消息类型
-#[derive(Clone, Serialize, Deserialize)]
-pub struct ServerMessage {
-    pub msg_type: String,
-    pub content: String,
-}
-
-// 创建房间
-let codec = JsonCodec::<ServerMessage>::new();
-let room = Arc::new(WsRoom::new(RoomId::new("my-room"), codec));
-
-// 处理连接
-let connection = WsConnection::new(codec);
-room.join(connection).await?;
-room.broadcast(&msg).await?;
-```
-
-## 🚀 快速开始
+## 快速开始
 
 ### 构建与运行
 
 ```bash
 # 克隆项目
-git clone https://github.com/openagentic/open-agentic.git
+git clone https://github.com/openagentic-ai/open-agentic.git
 cd open-agentic
 
-# 构建项目
+# 构建
 cargo build --release
 
-# 交互式配置向导
-cargo run -- wizard
+# 启动 Gateway
+cargo run --release -- gateway
 
-# 启动 Gateway 服务
-cargo run -- gateway
+# 启动 Gateway（指定端口）
+cargo run --release -- gateway --port 18790
 
-# 系统健康检查
-cargo run -- doctor
+# 健康检查
+curl http://localhost:18789/health
 ```
 
 ### CLI 命令
 
 | 命令 | 功能 |
 |------|------|
-| `wizard` | 交互式设置向导 |
-| `doctor` | 系统健康检查与修复 |
 | `gateway` | 启动 HTTP/WebSocket 服务 |
-| `agent` | 启动 Agent 对话模式 |
-| `daemon start` | 启动后台守护进程 |
-| `daemon install` | 安装为系统服务 |
+| `wizard` | 交互式设置向导 |
+| `doctor` | 系统健康检查 |
+| `agent` | Agent 对话模式 |
 
-## 🔧 API 端点
+## API 端点
 
-### 基础 API
+### 认证
 
-| 端点 | 方法 | 功能 |
-|------|------|------|
-| `/health` | GET | 健康检查 |
-| `/chat` | POST | 聊天对话 |
-| `/models` | GET | 可用模型列表 |
-| `/stats` | GET | 统计信息 |
+启用 JWT 认证后，除公开端点外所有请求需携带 `Authorization: Bearer <token>` 头。
 
-### 画布 API
+| 端点 | 方法 | 认证 | 功能 |
+|------|------|------|------|
+| `/health` | GET | 公开 | 健康检查 |
+| `/api/auth/login` | POST | 公开 | 登录获取 JWT token |
+| `/api/auth/token` | POST | 公开 | 刷新 token |
+| `/chat` | POST | 需认证 | 聊天对话 |
+| `/chat/stream` | GET | 需认证 | 流式聊天（SSE） |
+| `/models` | GET | 需认证 | 可用模型列表 |
+| `/api/agents` | GET/POST | 需认证 | Agent 管理 |
+| `/api/sessions` | GET/POST | 需认证 | 会话管理 |
+| `/ws` | GET | 公开 | WebSocket 连接 |
 
-| 端点 | 方法 | 功能 |
-|------|------|------|
-| `/canvas` | POST/GET | 创建/列出画布 |
-| `/canvas/{id}` | GET/DELETE | 获取/删除画布 |
-| `/canvas/{id}/ws` | GET | WebSocket 协作 |
+### 登录示例
 
-### 浏览器 API
+```bash
+# 获取 token
+curl -X POST http://localhost:18789/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
 
-| 端点 | 方法 | 功能 |
-|------|------|------|
-| `/browser` | POST | 创建浏览器实例 |
-| `/page/{id}/goto` | POST | 导航 |
-| `/page/{id}/click` | POST | 点击 |
-| `/page/{id}/screenshot` | POST | 截图 |
+# 使用 token 访问 API
+curl http://localhost:18789/models \
+  -H "Authorization: Bearer <token>"
+```
 
-### 设备 API
+## 配置
 
-| 端点 | 方法 | 功能 |
-|------|------|------|
-| `/device/nodes` | GET | 设备节点列表 |
-| `/device/{id}/camera` | POST | 拍照 |
-| `/device/{id}/screen` | GET | 屏幕截图 |
-| `/device/{id}/notify` | POST | 发送通知 |
-
-## ⚙️ 配置
-
-### 配置文件
-
-配置文件位于 `~/.open-agentic/openagentic.json`：
+配置文件位于 `~/.open-agentic/config.json`：
 
 ```json
 {
-  "user_name": "User",
-  "default_provider": "openai",
-  "default_model": "gpt-4o",
-  "providers": {
-    "openai": {
-      "api_key": "sk-..."
-    }
+  "server": {
+    "host": "0.0.0.0",
+    "port": 18789
   },
-  "sandbox": {
-    "enabled": false,
-    "default_type": "wasm",
-    "timeout_secs": 30,
-    "memory_limit_mb": 64
+  "ai": {
+    "default_provider": "ollama",
+    "providers": [
+      {
+        "name": "ollama",
+        "base_url": "http://localhost:11434",
+        "default_model": "qwen3:14b"
+      }
+    ]
+  },
+  "security": {
+    "jwt_secret": "your-secret-key-here",
+    "jwt_expiration_secs": 86400
   }
 }
 ```
 
-### 安全沙箱配置
+> `jwt_secret` 不配置则不启用认证，所有端点均可匿名访问。
 
-OpenAgentic 支持三种沙箱执行模式：
+## 开发路线
 
-| 模式 | 描述 | 适用场景 |
-|------|------|---------|
-| `wasm` | WASM 轻量沙箱 (推荐) | 高安全隔离，资源受限 |
-| `docker` | Docker 容器隔离 | 需要完整系统权限 |
-| `native` | 直接执行 (无隔离) | 开发调试 |
+- [x] 后端 Rust Gateway 编译运行
+- [ ] 对接 Ollama 测试对话
+- [ ] Web UI 对接后端
+- [x] JWT 认证中间件
+- [ ] 安全加固（Argon2、HTTPS、CORS 白名单、速率限制）
+- [ ] Android App 开发（Kotlin + 无障碍 API）
+- [ ] 域名注册、产品上线
 
-启用沙箱可获得与 IronClaw 同等的安全隔离：
-
-```json
-{
-  "sandbox": {
-    "enabled": true,
-    "default_type": "wasm"
-  }
-}
-```
-
-### 环境变量
+## 开发
 
 ```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAGENTIC_PORT=18789
-```
-
-## 🔧 开发
-
-### 运行测试
-
-```bash
-# 所有测试
+# 运行测试
 cargo test
 
 # 单模块测试
-cargo test -p openagentic-ws
 cargo test -p openagentic-server
-```
 
-### 代码检查
-
-```bash
+# 代码检查
 cargo clippy
-cargo fmt --check
 ```
 
-### 文档生成
-
-```bash
-cargo doc --open
-```
-
-## 📋 系统要求
+## 系统要求
 
 - **Rust**: 1.93+
-- **Docker**: 可选 (沙箱功能)
-- **Chrome/Chromium**: 可选 (浏览器控制)
+- **Docker**: 可选（沙箱功能）
+- **Chrome/Chromium**: 可选（浏览器控制）
+- **Android Studio**: App 开发
 
-## 🤝 贡献
+## 许可证
 
-欢迎贡献！请查看 [贡献指南](CONTRIBUTING.md)。
-
-## 📄 许可证
-
-MIT License - 详见 [LICENSE](LICENSE) 文件。
-
-## 🙏 致谢
-
-- [async-openai](https://github.com/64bit/async-openai) - OpenAI API 客户端
-- [chromiumoxide](https://github.com/mattsse/chromiumoxide) - Chrome DevTools Protocol 客户端
-- [bollard](https://github.com/fussybeaver/bollard) - Docker API 客户端
-- [axum](https://github.com/tokio-rs/axum) - Web 框架
-- [tokio](https://github.com/tokio-rs/tokio) - 异步运行时
-
----
-
-**OpenAgentic** - 让 AI 助手更简单、更强大
+MIT License — 详见 [LICENSE](LICENSE)。
