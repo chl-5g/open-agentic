@@ -332,43 +332,43 @@
 <!-- Error banner -->
 <div class="error-banner" id="errorBanner">
   <span id="errorText"></span>
-  <button style="background:none;border:none;color:var(--primary);cursor:pointer" onclick="hideError()">Dismiss</button>
+  <button style="background:none;border:none;color:var(--primary);cursor:pointer" onclick="hideError()" data-i18n="dismiss">Dismiss</button>
 </div>
 
 <!-- Chat area -->
 <div class="chat-area" id="chatArea">
   <div class="empty-state" id="emptyState">
     <h2>OpenAgentic</h2>
-    <p>Ask me anything</p>
+    <p data-i18n="ask_me_anything">Ask me anything</p>
   </div>
 </div>
 
 <!-- Input bar -->
 <div class="input-bar">
-  <input type="text" id="messageInput" placeholder="Type a message..."
+  <input type="text" id="messageInput" data-i18n-placeholder="type_a_message" placeholder="Type a message..."
     onkeydown="if(event.key==='Enter')sendMessage()">
-  <button class="icon-btn" onclick="alert('Voice input - coming soon')" title="Voice input">&#127908;</button>
-  <button class="icon-btn" id="sendBtn" onclick="sendMessage()" title="Send">&#10148;</button>
+  <button class="icon-btn" onclick="alert(t('voice_coming_soon'))" data-i18n-title="voice_input" title="Voice input">&#127908;</button>
+  <button class="icon-btn" id="sendBtn" onclick="sendMessage()" data-i18n-title="send" title="Send">&#10148;</button>
 </div>
 
 <!-- Settings dialog -->
 <div class="dialog-overlay" id="settingsDialog">
   <div class="dialog">
-    <h3>Settings</h3>
+    <h3 data-i18n="settings">Settings</h3>
 
     <!-- Gateway Settings -->
-    <div class="section-title">Gateway Settings</div>
+    <div class="section-title" data-i18n="gateway_settings">Gateway Settings</div>
     <hr class="section-divider">
-    <label>Gateway URL</label>
+    <label data-i18n="gateway_url">Gateway URL</label>
     <input type="text" id="gatewayUrl" placeholder="http://192.168.0.15:18789" value="http://192.168.0.15:18789">
-    <label>Username</label>
+    <label data-i18n="username">Username</label>
     <input type="text" id="username" placeholder="admin" value="admin">
-    <label>Password</label>
-    <input type="password" id="password" placeholder="Password">
-    <div style="margin-top:8px;font-size:13px;color:#4CAF50" id="connStatus">Connected</div>
+    <label data-i18n="password">Password</label>
+    <input type="password" id="password" data-i18n-placeholder="password" placeholder="Password">
+    <div style="margin-top:8px;font-size:13px;color:#4CAF50" id="connStatus" data-i18n="connected">Connected</div>
 
     <!-- Language Settings -->
-    <div class="section-title">Language Settings</div>
+    <div class="section-title" data-i18n="language_settings">Language Settings</div>
     <hr class="section-divider">
     <div class="lang-chips">
       <button class="lang-chip" onclick="setLang(this,'system')">System</button>
@@ -377,29 +377,116 @@
     </div>
 
     <div class="dialog-actions">
-      <button onclick="toggleSettings()">Cancel</button>
-      <button onclick="saveSettings()">Connect</button>
+      <button onclick="toggleSettings()" data-i18n="cancel">Cancel</button>
+      <button onclick="saveSettings()" data-i18n="save">Save</button>
     </div>
   </div>
 </div>
 
 <script>
-  // Demo messages for preview
-  const demoMessages = [
-    { text: 'Hello! How can I help you?', isUser: false },
-    { text: 'What is the weather in Fuzhou today?', isUser: true },
-    { text: 'The weather in Fuzhou today is partly cloudy, with temperatures around 22°C. Moderate humidity at 65%. A light breeze from the southeast.\n\nPerfect day to go outside!', isUser: false },
-    { text: 'Thanks! Can you help me send a message to Zhang San on WeChat?', isUser: true },
-    { text: 'I can help with that! Here\'s what I\'ll do:\n\n1. Open WeChat\n2. Search for "Zhang San"\n3. Open the chat\n4. Type your message\n\nWhat would you like to say to Zhang San?', isUser: false },
-  ];
+  // ---- i18n ----
+  const i18nStrings = {
+    en: {
+      settings: 'Settings',
+      gateway_settings: 'Gateway Settings',
+      language_settings: 'Language Settings',
+      gateway_url: 'Gateway URL',
+      username: 'Username',
+      password: 'Password',
+      connected: 'Connected',
+      not_connected: 'Not connected',
+      cancel: 'Cancel',
+      save: 'Save',
+      ask_me_anything: 'Ask me anything',
+      type_a_message: 'Type a message...',
+      voice_input: 'Voice input',
+      voice_coming_soon: 'Voice input coming soon',
+      send: 'Send',
+      dismiss: 'Dismiss',
+      thinking: 'Thinking...',
+      demo_response: 'This is a UI preview. In the real app, this response would come from your Gateway + LLM.',
+    },
+    zh: {
+      settings: '设置',
+      gateway_settings: '网关设置',
+      language_settings: '语言设置',
+      gateway_url: '网关地址',
+      username: '用户名',
+      password: '密码',
+      connected: '已连接',
+      not_connected: '未连接',
+      cancel: '取消',
+      save: '保存',
+      ask_me_anything: '有什么可以帮你的？',
+      type_a_message: '输入消息...',
+      voice_input: '语音输入',
+      voice_coming_soon: '语音输入即将上线',
+      send: '发送',
+      dismiss: '关闭',
+      thinking: '思考中...',
+      demo_response: '这是 UI 预览。在正式应用中，回复将来自你的 Gateway + LLM。',
+    },
+  };
 
+  let currentLang = localStorage.getItem('oa_lang') || 'zh';
+
+  function t(key) {
+    return (i18nStrings[currentLang] || i18nStrings.en)[key]
+      || (i18nStrings.en)[key]
+      || key;
+  }
+
+  function applyI18n() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      el.title = t(el.getAttribute('data-i18n-title'));
+    });
+    document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+  }
+
+  function setLang(el, lang) {
+    document.querySelectorAll('.lang-chip').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    if (lang === 'system') {
+      lang = navigator.language.startsWith('zh') ? 'zh' : 'en';
+    }
+    currentLang = lang;
+    localStorage.setItem('oa_lang', lang);
+    applyI18n();
+  }
+
+  // highlight the correct chip on load
+  function initLangChips() {
+    const stored = localStorage.getItem('oa_lang') || 'zh';
+    document.querySelectorAll('.lang-chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.lang-chip').forEach(c => {
+      const chipLang = c.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+      if (chipLang === stored || (chipLang === 'system' && !localStorage.getItem('oa_lang'))) {
+        c.classList.add('selected');
+      }
+    });
+  }
+
+  // ---- Chat ----
   const chatArea = document.getElementById('chatArea');
   const emptyState = document.getElementById('emptyState');
 
-  // Load demo messages
+  const demoMessages = [
+    { en: 'Hello! How can I help you?', zh: '你好！有什么可以帮你的？', isUser: false },
+    { en: 'What is the weather in Fuzhou today?', zh: '今天福州天气怎么样？', isUser: true },
+    { en: 'The weather in Fuzhou today is partly cloudy, with temperatures around 22°C. Moderate humidity at 65%. A light breeze from the southeast.\n\nPerfect day to go outside!', zh: '今天福州多云，气温约22°C，湿度65%，东南风微风。\n\n非常适合出门！', isUser: false },
+    { en: 'Thanks! Can you help me send a message to Zhang San on WeChat?', zh: '谢谢！你能帮我在微信上给张三发条消息吗？', isUser: true },
+    { en: "I can help with that! Here's what I'll do:\n\n1. Open WeChat\n2. Search for \"Zhang San\"\n3. Open the chat\n4. Type your message\n\nWhat would you like to say to Zhang San?", zh: '没问题！我的计划：\n\n1. 打开微信\n2. 搜索"张三"\n3. 打开聊天\n4. 输入消息\n\n你想对张三说什么？', isUser: false },
+  ];
+
   function loadDemo() {
     emptyState.style.display = 'none';
-    demoMessages.forEach(msg => addMessage(msg.text, msg.isUser));
+    demoMessages.forEach(msg => addMessage(msg[currentLang] || msg.en, msg.isUser));
     chatArea.scrollTop = chatArea.scrollHeight;
   }
 
@@ -426,22 +513,20 @@
     addMessage(text, true);
     input.value = '';
 
-    // Simulate AI response
     const typing = document.createElement('div');
     typing.className = 'typing';
-    typing.textContent = 'Thinking...';
+    typing.textContent = t('thinking');
     chatArea.appendChild(typing);
     chatArea.scrollTop = chatArea.scrollHeight;
 
     setTimeout(() => {
       chatArea.removeChild(typing);
-      addMessage('This is a UI preview. In the real app, this response would come from your Gateway + LLM.', false);
+      addMessage(t('demo_response'), false);
     }, 1500);
   }
 
   function toggleSettings() {
-    const d = document.getElementById('settingsDialog');
-    d.classList.toggle('show');
+    document.getElementById('settingsDialog').classList.toggle('show');
   }
 
   function saveSettings() {
@@ -457,12 +542,9 @@
     document.getElementById('errorBanner').classList.remove('show');
   }
 
-  function setLang(el, lang) {
-    document.querySelectorAll('.lang-chip').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-  }
-
-  // Load demo on start
+  // ---- Init ----
+  initLangChips();
+  applyI18n();
   loadDemo();
 </script>
 </body>
