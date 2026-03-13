@@ -26,6 +26,7 @@ pub mod skill_service;
 pub mod squad_service;
 pub mod sse;
 pub mod vector_store_registry;
+pub mod rate_limit;
 pub mod voice_service;
 pub mod websocket;
 

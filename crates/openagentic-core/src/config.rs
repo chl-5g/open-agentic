@@ -437,6 +437,33 @@ pub struct SecurityConfig {
     /// JWT token expiration in seconds (default: 86400 = 24h)
     #[serde(default)]
     pub jwt_expiration_secs: Option<u64>,
+    /// Admin username for login authentication
+    #[serde(default)]
+    pub admin_username: Option<String>,
+    /// Admin password hash (Argon2). Generate with: open-agentic hash-password <password>
+    #[serde(default)]
+    pub admin_password_hash: Option<String>,
+    /// CORS allowed origins (default: ["*"] = allow all). Example: ["http://localhost:3000", "http://192.168.0.10:3000"]
+    #[serde(default = "default_cors_origins")]
+    pub cors_origins: Vec<String>,
+    /// API rate limit: max requests per second per token (default: 10)
+    #[serde(default = "default_api_rate_limit")]
+    pub api_rate_limit: u32,
+    /// Login rate limit: max attempts per minute per IP (default: 5)
+    #[serde(default = "default_login_rate_limit")]
+    pub login_rate_limit: u32,
+}
+
+fn default_cors_origins() -> Vec<String> {
+    vec!["*".to_string()]
+}
+
+fn default_api_rate_limit() -> u32 {
+    10
+}
+
+fn default_login_rate_limit() -> u32 {
+    5
 }
 
 impl Default for SecurityConfig {
@@ -451,6 +478,11 @@ impl Default for SecurityConfig {
             stuck_timeout: Duration::from_secs(30),
             jwt_secret: None,
             jwt_expiration_secs: None,
+            admin_username: None,
+            admin_password_hash: None,
+            cors_origins: default_cors_origins(),
+            api_rate_limit: 10,
+            login_rate_limit: 5,
         }
     }
 }

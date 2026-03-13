@@ -1,9 +1,11 @@
 //! 网关服务
 
 use axum::Router;
+use axum::http::{header, HeaderName, HeaderValue};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 
 use openagentic_core::Result;
@@ -30,7 +32,7 @@ pub struct Gateway {
 impl Gateway {
     pub async fn new(config: ServerConfig) -> Result<Self> {
         init_all_factories();
-        
+
         let config_for_adapter = config.core.clone();
         let config_for_device = config.devices.clone();
 
@@ -43,7 +45,7 @@ impl Gateway {
         let qdrant_config = config.core.vector.qdrant.as_ref();
         let lancedb_config = config.core.vector.lancedb.as_ref();
         let milvus_config = config.core.vector.milvus.as_ref();
-        
+
         if let Err(e) = vector_store_registry
             .register_from_config(&backends, &backend_type, qdrant_config, lancedb_config, milvus_config)
             .await
@@ -154,8 +156,21 @@ impl Gateway {
         let jwt_config = JwtConfig::from_security_config(
             self.config.core.security.jwt_secret.as_deref(),
             self.config.core.security.jwt_expiration_secs,
+            self.config.core.security.admin_username.as_deref(),
+            self.config.core.security.admin_password_hash.as_deref(),
         )
         .map(Arc::new);
+
+        // Build CORS layer from config
+        let cors_layer = build_cors_layer(&self.config.core.security.cors_origins);
+
+        // Build rate limiters
+        let login_limiter = crate::rate_limit::LoginRateLimiter(Arc::new(
+            crate::rate_limit::RateLimiter::new(
+                self.config.core.security.login_rate_limit,
+                60.0,
+            ),
+        ));
 
         let app = Router::new()
             .merge(create_router(
@@ -165,7 +180,28 @@ impl Gateway {
                 jwt_config,
             ))
             .merge(websocket_router())
-            .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
+            .layer(axum::middleware::from_fn(
+                crate::rate_limit::login_rate_limit_middleware,
+            ))
+            .layer(axum::Extension(login_limiter))
+            .layer(cors_layer)
+            // Security response headers
+            .layer(SetResponseHeaderLayer::overriding(
+                HeaderName::from_static("x-content-type-options"),
+                HeaderValue::from_static("nosniff"),
+            ))
+            .layer(SetResponseHeaderLayer::overriding(
+                HeaderName::from_static("x-frame-options"),
+                HeaderValue::from_static("DENY"),
+            ))
+            .layer(SetResponseHeaderLayer::overriding(
+                HeaderName::from_static("x-xss-protection"),
+                HeaderValue::from_static("1; mode=block"),
+            ))
+            .layer(SetResponseHeaderLayer::overriding(
+                HeaderName::from_static("referrer-policy"),
+                HeaderValue::from_static("strict-origin-when-cross-origin"),
+            ))
             .layer(TraceLayer::new_for_http());
 
         let addr: SocketAddr = format!("{}:{}", self.config.server.host, self.config.server.port)
@@ -219,6 +255,37 @@ impl Gateway {
     }
 }
 
+/// Build CORS layer from configured origins
+fn build_cors_layer(origins: &[String]) -> CorsLayer {
+    use tower_http::cors::AllowOrigin;
+    use axum::http::Method;
+
+    let methods = vec![Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS];
+
+    if origins.is_empty() || (origins.len() == 1 && origins[0] == "*") {
+        tracing::warn!("CORS: allowing all origins (configure security.cors_origins for production)");
+        CorsLayer::new()
+            .allow_origin(tower_http::cors::Any)
+            .allow_methods(methods)
+            .allow_headers(tower_http::cors::Any)
+    } else {
+        let allowed: Vec<HeaderValue> = origins
+            .iter()
+            .filter_map(|o| o.parse::<HeaderValue>().ok())
+            .collect();
+        tracing::info!("CORS: allowing origins {:?}", origins);
+        CorsLayer::new()
+            .allow_origin(allowed)
+            .allow_methods(methods)
+            .allow_headers(vec![
+                header::AUTHORIZATION,
+                header::CONTENT_TYPE,
+                header::ACCEPT,
+            ])
+            .allow_credentials(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,5 +317,18 @@ mod tests {
         let gateway = Gateway::new(config).await.unwrap();
         let ctx = gateway.context();
         assert!(!ctx.config.server.enable_agents);
+    }
+
+    #[test]
+    fn test_cors_any() {
+        let _layer = build_cors_layer(&["*".to_string()]);
+    }
+
+    #[test]
+    fn test_cors_whitelist() {
+        let _layer = build_cors_layer(&[
+            "http://localhost:3000".to_string(),
+            "http://192.168.0.10:3000".to_string(),
+        ]);
     }
 }

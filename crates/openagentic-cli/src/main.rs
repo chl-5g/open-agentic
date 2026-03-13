@@ -144,6 +144,11 @@ enum Commands {
         #[arg(long, default_value = "http://localhost:18789")]
         gateway_url: String,
     },
+    /// Hash a password using Argon2 (for config file)
+    HashPassword {
+        /// Password to hash
+        password: String,
+    },
     /// Show version info
     Version,
 }
@@ -242,6 +247,17 @@ async fn main() -> Result<()> {
                 gateway_url,
             };
             cli.run().await?;
+        }
+        Commands::HashPassword { password } => {
+            match openagentic_server::auth_middleware::hash_password(&password) {
+                Ok(hash) => {
+                    println!("{}", hash);
+                }
+                Err(e) => {
+                    eprintln!("Failed to hash password: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
         Commands::Version => {
             println!("OpenAgentic {}", env!("CARGO_PKG_VERSION"));

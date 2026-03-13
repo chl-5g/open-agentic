@@ -323,6 +323,11 @@ impl UnifiedConfig {
             stuck_timeout: std::time::Duration::from_secs(300),
             jwt_secret: None,
             jwt_expiration_secs: None,
+            admin_username: None,
+            admin_password_hash: None,
+            cors_origins: vec!["*".to_string()],
+            api_rate_limit: 10,
+            login_rate_limit: 5,
         };
 
         crate::config::Config {

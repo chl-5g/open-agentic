@@ -3,6 +3,10 @@
 //! Provides Bearer token authentication for all API endpoints.
 //! Endpoints like /health are excluded from authentication.
 
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 use axum::{
     body::Body,
     extract::Request,
@@ -38,6 +42,10 @@ pub struct JwtConfig {
     pub expiration_secs: u64,
     /// Issuer
     pub issuer: String,
+    /// Admin username (if set, login requires matching credentials)
+    pub admin_username: Option<String>,
+    /// Admin password hash (Argon2)
+    pub admin_password_hash: Option<String>,
 }
 
 impl Default for JwtConfig {
@@ -46,6 +54,8 @@ impl Default for JwtConfig {
             secret: generate_default_secret(),
             expiration_secs: 86400, // 24 hours
             issuer: "openagentic".to_string(),
+            admin_username: None,
+            admin_password_hash: None,
         }
     }
 }
@@ -63,11 +73,15 @@ impl JwtConfig {
     pub fn from_security_config(
         jwt_secret: Option<&str>,
         jwt_expiration_secs: Option<u64>,
+        admin_username: Option<&str>,
+        admin_password_hash: Option<&str>,
     ) -> Option<Self> {
         jwt_secret.map(|secret| Self {
             secret: secret.to_string(),
             expiration_secs: jwt_expiration_secs.unwrap_or(86400),
             issuer: "openagentic".to_string(),
+            admin_username: admin_username.map(|s| s.to_string()),
+            admin_password_hash: admin_password_hash.map(|s| s.to_string()),
         })
     }
 
@@ -214,13 +228,11 @@ pub struct LoginResponse {
     pub token_type: String,
 }
 
-/// Login handler - generates JWT token
+/// Login handler - validates credentials with Argon2 and generates JWT token
 pub async fn login_handler(
     axum::extract::Extension(jwt_config): axum::extract::Extension<Arc<JwtConfig>>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, (StatusCode, Json<serde_json::Value>)> {
-    // For now, validate against configured credentials
-    // In production, this should check against a user database
     if request.username.is_empty() || request.password.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -229,6 +241,59 @@ pub async fn login_handler(
                 "code": 400
             })),
         ));
+    }
+
+    // Verify credentials if admin_username and admin_password_hash are configured
+    if let (Some(admin_user), Some(admin_hash)) =
+        (&jwt_config.admin_username, &jwt_config.admin_password_hash)
+    {
+        // Check username
+        if request.username != *admin_user {
+            tracing::warn!("Login failed: unknown username '{}'", request.username);
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "error": "Invalid username or password",
+                    "code": 401
+                })),
+            ));
+        }
+
+        // Verify password with Argon2
+        match PasswordHash::new(admin_hash) {
+            Ok(parsed_hash) => {
+                if Argon2::default()
+                    .verify_password(request.password.as_bytes(), &parsed_hash)
+                    .is_err()
+                {
+                    tracing::warn!("Login failed: wrong password for '{}'", request.username);
+                    return Err((
+                        StatusCode::UNAUTHORIZED,
+                        Json(serde_json::json!({
+                            "error": "Invalid username or password",
+                            "code": 401
+                        })),
+                    ));
+                }
+            }
+            Err(e) => {
+                tracing::error!("Invalid password hash in config: {}", e);
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": "Server authentication configuration error",
+                        "code": 500
+                    })),
+                ));
+            }
+        }
+
+        tracing::info!("Login successful for '{}'", request.username);
+    } else {
+        tracing::warn!(
+            "No admin credentials configured, allowing login for '{}'",
+            request.username
+        );
     }
 
     // Generate token
@@ -246,6 +311,14 @@ pub async fn login_handler(
             })),
         )),
     }
+}
+
+/// Hash a password using Argon2 (for CLI tool)
+pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let hash = argon2.hash_password(password.as_bytes(), &salt)?;
+    Ok(hash.to_string())
 }
 
 fn generate_default_secret() -> String {
@@ -290,5 +363,17 @@ mod tests {
         assert!(is_public_path("/api/auth/login"));
         assert!(!is_public_path("/chat"));
         assert!(!is_public_path("/api/agents"));
+    }
+
+    #[test]
+    fn test_hash_and_verify_password() {
+        let hash = hash_password("test_password_123").unwrap();
+        let parsed = PasswordHash::new(&hash).unwrap();
+        assert!(Argon2::default()
+            .verify_password(b"test_password_123", &parsed)
+            .is_ok());
+        assert!(Argon2::default()
+            .verify_password(b"wrong_password", &parsed)
+            .is_err());
     }
 }
