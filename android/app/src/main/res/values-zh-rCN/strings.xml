@@ -12,7 +12,9 @@
     <string name="dismiss">关闭</string>
 
     <!-- Settings dialog -->
+    <string name="settings">设置</string>
     <string name="gateway_settings">网关设置</string>
+    <string name="language_settings">语言设置</string>
     <string name="gateway_url">网关地址</string>
     <string name="gateway_url_hint">http://192.168.0.15:18789</string>
     <string name="username">用户名</string>

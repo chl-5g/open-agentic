@@ -71,7 +71,7 @@ fun ChatScreen(
                 },
                 actions = {
                     IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.gateway_settings))
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -298,9 +298,16 @@ fun SettingsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.gateway_settings)) },
+        title = { Text(stringResource(R.string.settings)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // -- Gateway Settings section --
+                Text(
+                    text = stringResource(R.string.gateway_settings),
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                HorizontalDivider()
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
@@ -324,14 +331,23 @@ fun SettingsDialog(
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-
-                // Language selector
+                // Connection status
                 Text(
-                    text = stringResource(R.string.language),
+                    text = if (isConnected) stringResource(R.string.connected)
+                    else stringResource(R.string.not_connected),
+                    color = if (isConnected) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // -- Language Settings section --
+                Text(
+                    text = stringResource(R.string.language_settings),
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                HorizontalDivider()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -355,14 +371,6 @@ fun SettingsDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
-
-                // Connection status
-                Text(
-                    text = if (isConnected) stringResource(R.string.connected)
-                    else stringResource(R.string.not_connected),
-                    color = if (isConnected) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
-                    fontSize = 13.sp,
-                )
             }
         },
         confirmButton = {
